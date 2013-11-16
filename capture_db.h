@@ -1,12 +1,12 @@
 /**
  * @file capture_db.h
  *  
- * @brief Capture raw radar samples into a database
+ * @brief Manage a database for capture of raw radar samples
  * 
  * @author John Brzustowski <jbrzusto is at fastmail dot fm>
  * @version 0.1
  * @date 2013
- * @license GPL v2 or later
+ * @license GPL v3 or later
  *
  */
 
@@ -54,6 +54,8 @@ class capture_db {
 
   //! record data from a single pulse
   void record_pulse (double ts, double azi, double elev, double rot, void * buffer);
+  //! record a parameter setting
+  void record_param (double ts, std::string param, double val);
 
  protected:
   int pulses_per_transaction; //!< number of pulses to write to database per transaction
@@ -80,6 +82,7 @@ class capture_db {
   sqlite3_stmt * st_record_pulse; //!< pre-compiled statement for recording raw pulse
   sqlite3_stmt * st_set_mode; //!< pre-compiled statement for seting meta mode
   sqlite3_stmt * st_lookup_retain_mode; //<! pre-compiled statement for setting retain mode
+  sqlite3_stmt * st_param_setting; //<! pre-compiled statement for recording a parameter setting
 
   //! update overall mode, given a component mode (radar, digitize, retain) has changed
   void update_mode(); 

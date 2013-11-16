@@ -30,6 +30,10 @@ main (int argc, char *argv[]) {
 
   for (int j = 0; j < 250; ++j) {
     clock_gettime(CLOCK_REALTIME, & now);
+    
+    double ts = now.tv_sec + now.tv_nsec / 1.0e9;
+    if (j % 25 == 0)
+      cap.record_param(ts, "radar.gain", j / 250.0);
 
     unsigned short *p = dat[j];
     if (j > 0) {
@@ -40,7 +44,7 @@ main (int argc, char *argv[]) {
     for (int i = 3; i < 1024; ++i)
       p[i] = 0.99 * .90674 * p[i-3] - 0.91234 * p[i-2] + 0.93462 * p[i-1];
     
-    cap.record_pulse(now.tv_sec + now.tv_nsec / 1.0e9, // timestamp now
+    cap.record_pulse(ts, // timestamp now
                      fmod(j * 360.0 / 125, 360), // azimuth
                      5.0, // constant 5 degree elevation
                      0.0, // constant 0 degree rotation of waveguide

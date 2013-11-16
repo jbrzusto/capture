@@ -1,12 +1,12 @@
 /**
  * @file capture_db.cc
  *  
- * @brief Capture raw radar samples into a database
+ * @brief  Manage a database for capture of raw radar samples.
  * 
  * @author John Brzustowski <jbrzusto is at fastmail dot fm>
  * @version 0.1
  * @date 2013
- * @license GPL v2 or later
+ * @license GPL v3 or later
  *
  */
 
@@ -48,6 +48,9 @@ capture_db::capture_db (std::string filename) :
 
   sqlite3_prepare_v2(db, "select retain_mode_key from retain_modes where name = ?", 
                      -1, & st_lookup_retain_mode, 0);
+
+  sqlite3_prepare_v2(db, "insert into param_settings (ts, param, val) values (?, ?, ?)", 
+                     -1, & st_param_setting, 0);
 
   set_retain_mode("full");
 }
@@ -164,6 +167,15 @@ capture_db::ensure_tables() {
   create index if not exists i_retain_mode on retain_mode_ranges (retain_mode_key);                    -- fast lookup of all range records in one retain mode
   create index if not exists i_retain_mode_azi_low on retain_mode_ranges (retain_mode_key, azi_low);   -- fast lookup of records by retain mode and azimuth low
   create index if not exists i_retain_mode_azi_high on retain_mode_ranges (retain_mode_key, azi_high); -- fast lookup of records by retain mode and azimuth high
+
+  create table if not exists param_settings (                                                      -- timestamped parameter settings; e.g. radar or digitizer gain
+    ts double,   -- real timestamp (GMT) at which setting became effective
+    param text,  -- name of parameter
+    val   double -- value parameter set to
+ );
+
+ create index if not exists i_param_setting_ts on param_settings (ts);
+ create index if not exists i_param_setting_param on param_settings (param);
 )", 0, 0, 0);
 };
 
@@ -278,3 +290,16 @@ capture_db::update_mode() {
   sqlite3_step (st_set_mode);
   mode = sqlite3_last_insert_rowid (db);
 };
+
+void
+capture_db::record_param (double ts, std::string param, double val) {
+  sqlite3_reset (st_param_setting);
+  sqlite3_bind_double (st_param_setting, 1, ts); 
+  sqlite3_bind_text (st_param_setting, 2, param.c_str(), -1, SQLITE_STATIC);
+  sqlite3_bind_double (st_param_setting, 3, val);
+  sqlite3_step (st_param_setting);
+};
+
+
+
+  
