@@ -1,0 +1,4 @@
+*.o
+*~
+*.sqlite
+test_capture_db
