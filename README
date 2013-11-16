@@ -1,0 +1,10 @@
+project: capture
+
+Copyright (C) 2013 John Brzustowski
+License: GPL Version 2 or later.
+
+Records data from the USRP bbprx (baseband pulse receiver) into an sqlite database.
+Retains GPS info, raw pulse data and metadata.
+Keeps track of radar mode, digitizing mode, retain mode.
+Retain mode allows for storing only a subset of sweep data, presumably to
+avoid recording clutter or regions of no interest.
