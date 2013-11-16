@@ -1,7 +1,7 @@
 project: capture
 
-Copyright (C) 2013 John Brzustowski
-License: GPL Version 2 or later.
+Copyright 2013 John Brzustowski
+License: GPL Version 3 or later.
 
 Records data from the USRP bbprx (baseband pulse receiver) into an sqlite database.
 Retains GPS info, raw pulse data and metadata.
