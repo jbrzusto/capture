@@ -1,8 +1,18 @@
 /* -*- c++ -*- */
 /*
- * Adapated from gnuradio 3.3.0's:
+ * @file capture.cc
+ *  
+ * @brief Capture raw radar samples into a database
+ * 
+ * @author John Brzustowski <jbrzusto is at fastmail dot fm>
+ * @version 0.1
+ * @date 2013
+ * @license GPL v3 or later
  *
- *    usrp/host/apps/test_usrp_standard_rx.cc
+ *
+ * Adapated from:
+ *
+ *    gnuradio-3.0.0/usrp/host/apps/test_usrp_standard_rx.cc
  *
  * whose licence is
  *
@@ -25,8 +35,6 @@
  *    the Free Software Foundation, Inc., 51 Franklin Street,
  *    Boston, MA 02110-1301, USA.
  *
- * This file adds:
- *    Copyright 2013 John Brzustowski
  */
 
 #include <iostream>
@@ -43,11 +51,13 @@
 #include <getopt.h>
 #include <assert.h>
 #include <math.h>
+#include <signal.h>
 #include <usrp/usrp_bbprx.h>
 #include <usrp/usrp_bytesex.h>
 #include "fpga_regs_common.h"
 #include "fpga_regs_bbprx.h"
 #include <boost/program_options.hpp>
+#include "capture_db.h"
 
 namespace po = boost::program_options;
 
@@ -55,10 +65,27 @@ namespace po = boost::program_options;
 
 #define MAX_N_SAMPLES 16384
 
-static bool test_input (usrp_bbprx_sptr urx, int n_pulses, FILE *fp, bool raw);
+static void do_capture (usrp_bbprx_sptr urx, capture_db * cap);
+
+double now() {
+  static struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, & ts);
+  return ts.tv_sec + ts.tv_nsec / 1.0e9;
+};
+
+static capture_db * cap = 0;
+
+void die(int sig) {
+  if (cap)
+    delete cap;
+};
 
 int main(int argc, char *argv[])
 {
+  signal (SIG_INT, die);
+  signal (SIG_TERM, die);
+  signal (SIG_QUIT, die);
+
   int			which		   = 0;		// specify which USRP board
   unsigned int		decim		   = 16;	// decimation rate
   float			vid_gain	   = 0;		// video gain
@@ -87,11 +114,11 @@ int main(int argc, char *argv[])
   unsigned int          bbprx_mode         = 0;         // sampling mode
   unsigned int          signal_sources     = 0x00010203; // VID: RX_A_A, TRIG: RX_B_A, HDG: RX_A_B, AZI: RX_B_B
 
-  std::string		filename	   = "received.dat";
+  std::string		filename	   = "capture_data.sqlite";
   int			fusb_block_size	   = 0;
   int			fusb_nblocks	   = 0;
   int                   quiet              = false;     // don't output diagnostics to stdout
-  po::options_description	cmdconfig("Program options: test_usrp_bbprx [options] filename");
+  po::options_description	cmdconfig("Usage: capture [options] [filename]");
 
   cmdconfig.add_options()
     ("help,h", "produce help message")
@@ -130,7 +157,7 @@ int main(int argc, char *argv[])
 
   po::options_description fileconfig("Input file options");
   fileconfig.add_options()
-    ("filename", po::value<std::string>(), "input file")
+    ("filename", po::value<std::string>(), "output file")
     ;
 
   po::positional_options_description inputfile;
@@ -214,13 +241,7 @@ int main(int argc, char *argv[])
     std::cout << "counting?: " << counting << std::endl;
     std::cout << "sampling mode: " << bbprx_mode << std::endl;
     std::cout << "raw_packets?:" << raw_packets << std::endl;
-  }
-  FILE *fp = 0;
-
-  fp = fopen (filename.c_str(), "wb");
-  if (fp == 0)
-    perror (filename.c_str());
-      
+  }      
   int mode = 0;
 
   if (counting)
@@ -307,10 +328,33 @@ int main(int argc, char *argv[])
   if (!urx->set_active (true))
     perror ("urx->set_active");
 
-  test_input (urx, n_pulses, fp, (bbprx_mode > 0) | raw_packets);
+  cap = new capture_db(filename);
 
-  if (fp)
-    fclose (fp);
+  // assume short-pulse mode for Bridgemaster E
+
+  cap->set_radar_mode( 25e3, // pulse power, watts
+                        50, // pulse length, nanoseconds
+                      1800, // pulse repetition frequency, Hz
+                        28  // antenna rotation rate, RPM
+                      );
+
+  // record digitizing mode
+  cap->set_digitize_mode( 64e6 / (1 + decim), // digitizing rate, Hz
+                         12,   // 12 bits per sample in 16-bit 
+                         n_samples  // samples per pulse
+                         );
+
+  cap->set_retain_mode( "full" ); // keep all samples from all pulses
+
+  double ts = now();
+  cap->set_geo(ts, 
+              45.372657, -64.404823, 30, // lat, long, alt of Fundy Force radar site
+              0); // heading offset, in degrees
+
+  cap->record_param(ts, "vid_gain", vid_gain);
+  cap->record_param(ts, "vid_negate", vid_negate);
+  
+  do_capture (urx, cap);
 
   if (!urx->stop())
     perror ("urx->stop");
@@ -321,23 +365,22 @@ int main(int argc, char *argv[])
   return 0;
 }
 
-static bool
-test_input  (usrp_bbprx_sptr urx, int n_pulses, FILE *fp, bool raw)
+static void
+do_capture  (usrp_bbprx_sptr urx, capture_db * cap)
 {
-  int		   fd = -1;
   static unsigned short   buf[MAX_N_SAMPLES];
 
   pulse_metadata meta;
 
   unsigned int packets_dropped = 0;
-  if (fp)
-    fd = fileno (fp);
-
   bool okay = true;
+  struct timespec now;
 
   for (int j = 0; n_pulses < 0 || j < n_pulses; ++j) {
       
     okay = urx->get_pulse(buf, raw, &meta) && okay;
+    clock_gettime(CLOCK_REALTIME, & now);
+
     if (n_pulses < 0 && !okay) {
       fprintf(stderr, "n_read_errors=%d, n_overruns=%d, n_missing_USB_packets=%d, n_missing_data_packets=%d\n", 
 	      urx->n_read_errors, urx->n_overruns, urx->n_missing_USB_packets, urx->n_missing_data_packets);
