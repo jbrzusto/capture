@@ -45,6 +45,7 @@ main (int argc, char *argv[]) {
       p[i] = 0.99 * .90674 * p[i-3] - 0.91234 * p[i-2] + 0.93462 * p[i-1];
     
     cap.record_pulse(ts, // timestamp now
+                     j, // pulse count
                      fmod(j * 360.0 / 125, 360), // azimuth
                      5.0, // constant 5 degree elevation
                      0.0, // constant 0 degree rotation of waveguide
