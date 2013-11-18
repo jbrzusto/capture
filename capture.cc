@@ -64,8 +64,9 @@ namespace po = boost::program_options;
 #include <sched.h>
 
 #define MAX_N_SAMPLES 16384
+#define PULSES_PER_TRANSACTION 100
 
-static void do_capture (usrp_bbprx_sptr urx, capture_db * cap);
+static void do_capture (usrp_bbprx_sptr urx, capture_db * cap, int n_samples);
 
 double now() {
   static struct timespec ts;
@@ -74,17 +75,32 @@ double now() {
 };
 
 static capture_db * cap = 0;
+static usrp_bbprx_sptr urx;
 
 void die(int sig) {
+  if (urx) {
+    //    !urx->stop();
+    //    !urx->set_active (false);
+    delete urx.get();
+  }
   if (cap)
     delete cap;
 };
 
 int main(int argc, char *argv[])
 {
-  signal (SIG_INT, die);
-  signal (SIG_TERM, die);
-  signal (SIG_QUIT, die);
+  struct sigaction sa;
+  sigset_t sigs;
+  sigfillset( &sigs);
+
+  sa.sa_handler = die;
+  sa.sa_mask = sigs;
+
+  sigaction (SIGINT, &sa, 0);
+  sigaction (SIGTERM, &sa, 0);
+  sigaction (SIGQUIT, &sa, 0);
+  sigaction (SIGSEGV, &sa, 0);
+  sigaction (SIGILL, &sa, 0);
 
   int			which		   = 0;		// specify which USRP board
   unsigned int		decim		   = 16;	// decimation rate
@@ -247,8 +263,7 @@ int main(int argc, char *argv[])
   if (counting)
     mode |= FPGA_MODE_COUNTING;
 
-  usrp_bbprx_sptr urx = 
-    usrp_bbprx::make (which, fusb_block_size, fusb_nblocks);
+ urx =     usrp_bbprx::make (which, fusb_block_size, fusb_nblocks);
 
   if (urx == 0)
     perror ("usrp_bbprx::make");
@@ -344,17 +359,19 @@ int main(int argc, char *argv[])
                          n_samples  // samples per pulse
                          );
 
-  cap->set_retain_mode( "full" ); // keep all samples from all pulses
+  cap->set_retain_mode ("full"); // keep all samples from all pulses
+
+  cap->set_pulses_per_transaction (PULSES_PER_TRANSACTION); // commit to keeping data for at least PULSES_PER_TRANSACTION pulses
 
   double ts = now();
-  cap->set_geo(ts, 
+  cap->record_geo(ts, 
               45.372657, -64.404823, 30, // lat, long, alt of Fundy Force radar site
               0); // heading offset, in degrees
 
   cap->record_param(ts, "vid_gain", vid_gain);
   cap->record_param(ts, "vid_negate", vid_negate);
   
-  do_capture (urx, cap);
+  do_capture (urx, cap, n_samples);
 
   if (!urx->stop())
     perror ("urx->stop");
@@ -366,58 +383,38 @@ int main(int argc, char *argv[])
 }
 
 static void
-do_capture  (usrp_bbprx_sptr urx, capture_db * cap)
+do_capture  (usrp_bbprx_sptr urx, capture_db * cap, int n_samples)
 {
-  static unsigned short   buf[MAX_N_SAMPLES];
+  unsigned short buf[5 * PULSES_PER_TRANSACTION][n_samples];
 
   pulse_metadata meta;
 
   unsigned int packets_dropped = 0;
   bool okay = true;
-  struct timespec now;
 
-  for (int j = 0; n_pulses < 0 || j < n_pulses; ++j) {
+  for (int j = 0;/**/;/**/) {
       
-    okay = urx->get_pulse(buf, raw, &meta) && okay;
-    clock_gettime(CLOCK_REALTIME, & now);
+    okay = urx->get_pulse(buf[j], false, &meta) && okay;
 
-    if (n_pulses < 0 && !okay) {
-      fprintf(stderr, "n_read_errors=%d, n_overruns=%d, n_missing_USB_packets=%d, n_missing_data_packets=%d\n", 
-	      urx->n_read_errors, urx->n_overruns, urx->n_missing_USB_packets, urx->n_missing_data_packets);
-      urx->n_read_errors = 0;
-      urx->n_overruns = 0;
-      urx->n_missing_USB_packets = 0;
-      urx->n_missing_data_packets = 0;
-      okay = true;
-    }
+    double ts = now();
+    // if (n_pulses < 0 && !okay) {
+    //   fprintf(stderr, "n_read_errors=%d, n_overruns=%d, n_missing_USB_packets=%d, n_missing_data_packets=%d\n", 
+    //           urx->n_read_errors, urx->n_overruns, urx->n_missing_USB_packets, urx->n_missing_data_packets);
+    //   urx->n_read_errors = 0;
+    //   urx->n_overruns = 0;
+    //   urx->n_missing_USB_packets = 0;
+    //   urx->n_missing_data_packets = 0;
+    //   okay = true;
+    // }
 
-    if (write (fd, buf, sizeof(unsigned short) * urx->n_samples()) == -1) {
-      perror ("write");
-      fd = -1;
-      break;
-    }
-    if (n_pulses < 0 && packets_dropped) {
-      fprintf (stderr, "test_input: dropped %d packets\n", packets_dropped);
-      packets_dropped = 0;
-    }
+    cap->record_pulse (ts, // timestamp at PC; okay for now, use better value combining RTC, USRP clocks as usrp_pulse_buffer does
+                       meta.n_trigs,
+                       (meta.n_ACPs % 2048) * 360.0 / 2048.0,  // rough - based on 2048 ACPs per sweep
+                       0, // constant 0 elevation angle for FORCE radar
+                       0, // constant polarization for FORCE radar
+                       & buf[j][0]);
+    ++j;
+    if (j == 5 * PULSES_PER_TRANSACTION)
+      j = 0;
   }
-  if (!okay) {
-      fprintf(stderr, "n_read_errors=%d, n_overruns=%d, n_missing_USB_packets=%d, n_missing_data_packets=%d\n", 
-	      urx->n_read_errors, urx->n_overruns, urx->n_missing_USB_packets, urx->n_missing_data_packets);
-  }
-	 
-  long long nbytes = urx->n_samples() * n_pulses * sizeof(unsigned short);
-  printf ("xfered %Ld bytes\n", nbytes);
-
-  printf ("For last pulse:\nticks=%Lu\ntrig_interval=%u\nARP_interval=%u\nACP_interval=%u\nticks_since_last_ACP=%u\nn_trigs=%u\nn_ARPs=%u\nn_ACPs=%u\nUSB_serial_no=%u\n",
-	  meta.clock_ticks,
-	  meta.trig_interval,
-	  meta.ARP_interval,
-	  meta.ACP_interval,
-	  meta.ticks_since_last_ACP,
-	  meta.n_trigs,
-	  meta.n_ARPs,
-	  meta.n_ACPs,
-	  meta.USB_serial_no);
-  return true;
 }

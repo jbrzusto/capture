@@ -53,9 +53,19 @@ class capture_db {
   void record_geo (double ts, double lat, double lon, double alt, double heading);
 
   //! record data from a single pulse
-  void record_pulse (double ts, double azi, double elev, double rot, void * buffer);
+  void record_pulse (double ts, int trigs, double azi, double elev, double rot, void * buffer);
+
   //! record a parameter setting
   void record_param (double ts, std::string param, double val);
+
+  //! set the number of pulses per transaction; caller is guaranteeing
+  //! data for this many consecutive pulses is effectively static
+  //! so that sqlite need not make a private copy before commiting the
+  //! INSERT transaction.
+  void set_pulses_per_transaction(int pulses_per_transaction);
+
+  //! get the number of pulses per transaction
+  int get_pulses_per_transaction();
 
  protected:
   int pulses_per_transaction; //!< number of pulses to write to database per transaction
@@ -73,16 +83,9 @@ class capture_db {
 
   double last_azi; //!< last azimuth for which a pulse was recorded
   long long int sweep_count; //!< sweep count
-  bool uncommitted_transaction; //!< is there an uncommitted transaction?
 
   sqlite3 * db; //<! handle to sqlite connection
-  sqlite3_stmt * st_set_radar_mode; //<! pre-compiled statement for setting radar mode
-  sqlite3_stmt * st_set_digitize_mode; //<! pre-compiled statement for setting digitize mode
-  sqlite3_stmt * st_record_geo; //<! pre-compiled statement for recording geo data
-  sqlite3_stmt * st_record_pulse; //!< pre-compiled statement for recording raw pulse
-  sqlite3_stmt * st_set_mode; //!< pre-compiled statement for seting meta mode
-  sqlite3_stmt * st_lookup_retain_mode; //<! pre-compiled statement for setting retain mode
-  sqlite3_stmt * st_param_setting; //<! pre-compiled statement for recording a parameter setting
+  sqlite3_stmt * st_record_pulse; //!< pre-compiled statement for recording raw pulses
 
   //! update overall mode, given a component mode (radar, digitize, retain) has changed
   void update_mode(); 

@@ -20,7 +20,7 @@ capture_db::capture_db (std::string filename) :
   digitize_mode (-1),
   last_azi(1000), // larger than any real value, so first pulse always begins a new sweep
   sweep_count(0),
-  uncommitted_transaction(false)
+  st_record_pulse(0)
 {
   if (SQLITE_OK != sqlite3_open_v2(filename.c_str(),
                   & db,
@@ -29,54 +29,23 @@ capture_db::capture_db (std::string filename) :
     throw std::runtime_error("Couldn't open database for output");
 
   sqlite3_exec(db, "pragma journal_mode=WAL;", 0, 0, 0);
+  sqlite3_exec(db, "pragma wal_autocheckpoint=5000;", 0, 0, 0);
 
   ensure_tables();
-  sqlite3_prepare_v2(db, "insert or replace into radar_modes (power, plen, prf, rpm) values (?, ?, ?, ?)",
-                     -1, & st_set_radar_mode, 0);
 
-  sqlite3_prepare_v2(db, "insert or replace into digitize_modes (rate, format, ns) values (?, ?, ?)",
-                     -1, & st_set_digitize_mode, 0);
 
-  sqlite3_prepare_v2(db, "insert into geo (ts, lat, lon, alt, heading) values (?, ?, ?, ?, ?)",
-                     -1, & st_record_geo, 0);
-
-  sqlite3_prepare_v2(db, "insert into pulses (sweep_key, mode_key, ts, azi, elev, rot, samples) values (?, ?, ?, ?, ?, ?, ?)",
-                     -1, & st_record_pulse, 0);
-
-  sqlite3_prepare_v2(db, "insert or replace into modes (radar_mode_key, digitize_mode_key, retain_mode_key) values (?, ?, ?)",
-                     -1, & st_set_mode, 0);
-
-  sqlite3_prepare_v2(db, "select retain_mode_key from retain_modes where name = ?", 
-                     -1, & st_lookup_retain_mode, 0);
-
-  sqlite3_prepare_v2(db, "insert into param_settings (ts, param, val) values (?, ?, ?)", 
-                     -1, & st_param_setting, 0);
 
   set_retain_mode("full");
 }
 
 capture_db::~capture_db () {
 
-  if (uncommitted_transaction) {
+  if (st_record_pulse) {
     sqlite3_exec(db, "commit;", 0, 0, 0);
-    uncommitted_transaction = false;
+    sqlite3_finalize(st_record_pulse);
+    st_record_pulse = 0;
   };
-  sqlite3_exec(db, "pragma journal_mode=truncate;", 0, 0, 0);
-
-  sqlite3_finalize (st_set_radar_mode);
-  st_set_radar_mode = 0;
-
-  sqlite3_finalize (st_set_digitize_mode);
-  st_set_digitize_mode = 0;
-  sqlite3_finalize (st_record_geo);
-  st_record_geo = 0;
-  sqlite3_finalize (st_record_pulse);
-  st_record_pulse = 0;
-  sqlite3_finalize (st_set_mode);
-  st_set_mode = 0;
-  sqlite3_finalize (st_lookup_retain_mode);
-  st_lookup_retain_mode = 0;
-
+  sqlite3_exec(db, "pragma journal_mode=delete;", 0, 0, 0);
   sqlite3_close (db);
   db = 0;
 
@@ -90,6 +59,7 @@ capture_db::ensure_tables() {
      sweep_key integer not null,                                                                       -- groups together pulses from same sweep
      mode_key integer references modes (mode_key),                                                     -- additional pulse metadata describing sampling rate etc.
      ts double,                                                                                        -- timestamp for start of pulse
+     trigs integer,                                                                                    -- trigger count, for detecting dropped pulses
      azi double,                                                                                       -- azimuth of pulse, relative to start of heading pulse (radians)
      elev double,                                                                                      -- elevation angle (radians)
      rot double,                                                                                       -- rotation of waveguide (polarization - radians)
@@ -181,23 +151,28 @@ capture_db::ensure_tables() {
 
 void 
 capture_db::set_radar_mode (double power, double plen, double prf, double rpm) {
-  sqlite3_reset (st_set_radar_mode);
-  sqlite3_bind_double (st_set_radar_mode, 1, power);
-  sqlite3_bind_double (st_set_radar_mode, 2, plen);
-  sqlite3_bind_double (st_set_radar_mode, 3, prf);
-  sqlite3_bind_double (st_set_radar_mode, 4, rpm);
-  sqlite3_step (st_set_radar_mode);
+  sqlite3_stmt *st;
+  sqlite3_prepare_v2(db, "insert or replace into radar_modes (power, plen, prf, rpm) values (?, ?, ?, ?)",
+                     -1, & st, 0);
+  sqlite3_bind_double (st, 1, power);
+  sqlite3_bind_double (st, 2, plen);
+  sqlite3_bind_double (st, 3, prf);
+  sqlite3_bind_double (st, 4, rpm);
+  sqlite3_step (st);
   radar_mode = sqlite3_last_insert_rowid (db);
+  sqlite3_finalize (st);
   update_mode();
 };
 
 void 
 capture_db::set_digitize_mode (double rate, int format, int ns) {
-  sqlite3_reset (st_set_digitize_mode);
-  sqlite3_bind_double (st_set_digitize_mode, 1, rate);
-  sqlite3_bind_int (st_set_digitize_mode, 2, format);
-  sqlite3_bind_int (st_set_digitize_mode, 3, ns);
-  sqlite3_step (st_set_digitize_mode);
+  sqlite3_stmt *st;
+  sqlite3_prepare_v2(db, "insert or replace into digitize_modes (rate, format, ns) values (?, ?, ?)",
+                     -1, & st, 0);
+  sqlite3_bind_double (st, 1, rate);
+  sqlite3_bind_int (st, 2, format);
+  sqlite3_bind_int (st, 3, ns);
+  sqlite3_step (st);
   digitize_mode = sqlite3_last_insert_rowid (db);
   digitize_rate = rate;
   digitize_format = format;
@@ -207,27 +182,34 @@ capture_db::set_digitize_mode (double rate, int format, int ns) {
   } else {
     digitize_num_bytes = ns * (((format & 0xff) + 7) / 8);  // each sample takes integer number of bytes
   }
+  sqlite3_finalize (st);
   update_mode();
 };  
 
 void 
 capture_db::record_geo (double ts, double lat, double lon, double elev, double heading) {
-  sqlite3_reset (st_record_geo);
-  sqlite3_bind_double (st_record_geo, 1, ts);
-  sqlite3_bind_double (st_record_geo, 2, lat);
-  sqlite3_bind_double (st_record_geo, 3, lon);
-  sqlite3_bind_double (st_record_geo, 4, elev);
-  sqlite3_bind_double (st_record_geo, 5, elev);
-  sqlite3_step (st_record_geo);
+  sqlite3_stmt *st;
+  sqlite3_prepare_v2(db, "insert into geo (ts, lat, lon, alt, heading) values (?, ?, ?, ?, ?)",
+                     -1, & st, 0);
+
+  sqlite3_bind_double (st, 1, ts);
+  sqlite3_bind_double (st, 2, lat);
+  sqlite3_bind_double (st, 3, lon);
+  sqlite3_bind_double (st, 4, elev);
+  sqlite3_bind_double (st, 5, elev);
+  sqlite3_step (st);
+  sqlite3_finalize (st);
 };
   
 
 void 
-capture_db::record_pulse (double ts, double azi, double elev, double rot, void * buffer) {
-  if (! uncommitted_transaction) {
+capture_db::record_pulse (double ts, int trigs, double azi, double elev, double rot, void * buffer) {
+  if (! st_record_pulse) {
+    sqlite3_prepare_v2(db, "insert into pulses (sweep_key, mode_key, ts, trigs, azi, elev, rot, samples) values (?, ?, ?, ?, ?, ?, ?, ?)",
+                     -1, & st_record_pulse, 0);
+
     sqlite3_exec (db, "begin transaction", 0, 0, 0);
     pulses_written_this_trans = 0;
-    uncommitted_transaction = true;
   }
   
   if (azi < last_azi)
@@ -237,11 +219,12 @@ capture_db::record_pulse (double ts, double azi, double elev, double rot, void *
   sqlite3_bind_double (st_record_pulse, 1, sweep_count);
   sqlite3_bind_double (st_record_pulse, 2, mode);
   sqlite3_bind_double (st_record_pulse, 3, ts);
-  sqlite3_bind_double (st_record_pulse, 4, azi);
-  sqlite3_bind_double (st_record_pulse, 5, elev);
-  sqlite3_bind_double (st_record_pulse, 6, rot);
+  sqlite3_bind_int    (st_record_pulse, 4, trigs);
+  sqlite3_bind_double (st_record_pulse, 5, azi);
+  sqlite3_bind_double (st_record_pulse, 6, elev);
+  sqlite3_bind_double (st_record_pulse, 7, rot);
   if (is_full_retain_mode()) {
-    sqlite3_bind_blob (st_record_pulse, 7, buffer, digitize_num_bytes, SQLITE_STATIC); 
+    sqlite3_bind_blob (st_record_pulse, 8, buffer, digitize_num_bytes, SQLITE_STATIC); 
   } else {
     // FIXME: figure out which bytes to copy
   }
@@ -251,20 +234,28 @@ capture_db::record_pulse (double ts, double azi, double elev, double rot, void *
 
   ++pulses_written_this_trans;
   if (pulses_written_this_trans == pulses_per_transaction) {
+    
     sqlite3_exec (db, "commit", 0, 0, 0);
-    uncommitted_transaction = false;
+    sqlite3_finalize (st_record_pulse);
+    st_record_pulse = 0;
   }
 };
 
 void
 capture_db::set_retain_mode (std::string mode)
 {
-  sqlite3_reset (st_lookup_retain_mode);
-  sqlite3_bind_text (st_lookup_retain_mode, 1, mode.c_str(), -1, SQLITE_TRANSIENT);
-  if (SQLITE_ROW != sqlite3_step (st_lookup_retain_mode))
+  sqlite3_stmt * st;
+  sqlite3_prepare_v2(db, "select retain_mode_key from retain_modes where name = ?", 
+                     -1, & st, 0);
+
+  sqlite3_bind_text (st, 1, mode.c_str(), -1, SQLITE_TRANSIENT);
+  if (SQLITE_ROW != sqlite3_step (st)) {
+    sqlite3_finalize (st);
     throw std::runtime_error(std::string("Non existent retain mode selected: '") + mode + "'");
-  retain_mode = sqlite3_column_int (st_lookup_retain_mode, 0);
+  }
+  retain_mode = sqlite3_column_int (st, 0);
   retain_mode_name = mode;
+  sqlite3_finalize (st);
 };
 
 void 
@@ -283,23 +274,39 @@ capture_db::update_mode() {
   // do nothing if a component mode is not set
   if (radar_mode <= 0 || digitize_mode <= 0 || retain_mode <= 0)
     return;
-  sqlite3_reset (st_set_mode);
-  sqlite3_bind_int (st_set_mode, 1, radar_mode);
-  sqlite3_bind_int (st_set_mode, 2, digitize_mode);
-  sqlite3_bind_int (st_set_mode, 3, retain_mode); 
-  sqlite3_step (st_set_mode);
+  sqlite3_stmt * st;
+  sqlite3_prepare_v2(db, "insert or replace into modes (radar_mode_key, digitize_mode_key, retain_mode_key) values (?, ?, ?)",
+                     -1, & st, 0);
+  sqlite3_bind_int (st, 1, radar_mode);
+  sqlite3_bind_int (st, 2, digitize_mode);
+  sqlite3_bind_int (st, 3, retain_mode); 
+  sqlite3_step (st);
   mode = sqlite3_last_insert_rowid (db);
+  sqlite3_finalize (st);
 };
 
 void
 capture_db::record_param (double ts, std::string param, double val) {
-  sqlite3_reset (st_param_setting);
-  sqlite3_bind_double (st_param_setting, 1, ts); 
-  sqlite3_bind_text (st_param_setting, 2, param.c_str(), -1, SQLITE_STATIC);
-  sqlite3_bind_double (st_param_setting, 3, val);
-  sqlite3_step (st_param_setting);
+  sqlite3_stmt * st;
+  sqlite3_prepare_v2(db, "insert into param_settings (ts, param, val) values (?, ?, ?)", 
+                     -1, & st, 0);
+
+  sqlite3_bind_double (st, 1, ts); 
+  sqlite3_bind_text (st, 2, param.c_str(), -1, SQLITE_STATIC);
+  sqlite3_bind_double (st, 3, val);
+  sqlite3_step (st);
+  sqlite3_finalize (st);
 };
 
+void
+capture_db::set_pulses_per_transaction (int pulses_per_transaction) {
+  this->pulses_per_transaction = pulses_per_transaction;
+};
+
+int
+capture_db::get_pulses_per_transaction () {
+  return pulses_per_transaction;
+};
 
 
   
