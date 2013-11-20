@@ -26,12 +26,12 @@ capture_db::capture_db (std::string filename, std::string sem_name, std::string 
   sweep_count(0),
   st_record_pulse(0)
 {
-  sem_latest_pulse_timestamp = sem_open(sem_name.c_str(), O_CREAT | O_RDWR, S_IRWXG + S_IROTH);
+  sem_latest_pulse_timestamp = sem_open(sem_name.c_str(), O_CREAT | O_RDWR, S_IRWXU + S_IRWXG + S_IROTH);
   if (! sem_latest_pulse_timestamp) {
     throw std::runtime_error("Coudln't open semaphore");
   }
 
-  shm_latest_pulse_timestamp = shm_open(shm_name.c_str(), O_CREAT | O_RDWR, S_IRWXU + S_IROTH);
+  shm_latest_pulse_timestamp = shm_open(shm_name.c_str(), O_CREAT | O_RDWR, S_IRWXU + S_IRWXG + S_IROTH);
   if (! shm_latest_pulse_timestamp) {
     throw std::runtime_error("Coudln't open shared memory");
   };
