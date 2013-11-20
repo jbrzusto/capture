@@ -2,7 +2,7 @@
 
 CPPOPTS=-std=c++11 -O2
 USRP_INCLUDE=-I/home/radar/gnuradio/usrp/host/include -I/home/radar/gnuradio/usrp/firmware/include
-USRP_LIBS=-L/home/radar/gnuradio/usrp/host/lib -lusrp
+USRP_LIBS=-L/home/radar/gnuradio/usrp/host/lib -lusrp -lpthread
 
 all: capture test_capture_db
 
@@ -20,3 +20,6 @@ capture.o: capture.cc capture_db.h
 
 capture: capture.o capture_db.o
 	gcc -o $@ $^ $(USRP_LIBS) -lusb-1.0 -lboost_program_options -lboost_thread -lrt -lsqlite3
+
+scan_converter.o: scan_converter.h scan_converter.cc
+	g++ $(CPPOPTS) -o $@ -c scan_converter.cc
