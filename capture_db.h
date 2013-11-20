@@ -27,7 +27,7 @@ class capture_db {
   enum {FORMAT_PACKED_FLAG = 512};
 
   //! constructor which opens a connection to the SQLITE file
-  capture_db (std::string filename, std::string sem_name);
+  capture_db (std::string filename, std::string sem_name, std::string shm_name);
 
   //! destructor which closes connection to the SQLITE file
   ~capture_db (); // close the database file
@@ -88,7 +88,10 @@ class capture_db {
   sqlite3 * db; //<! handle to sqlite connection
   sqlite3_stmt * st_record_pulse; //!< pre-compiled statement for recording raw pulses
 
-  sem_t * have_new_data; //<! semaphore to signal newly committed data
+  sem_t * sem_latest_pulse_timestamp; //<! semaphore to protect timestamp of committed data
+  int shm_latest_pulse_timestamp; //<! handle to shared memory for storing latest committed pulse timestamp
+  double * latest_pulse_timestamp; //<! pointer to storage for latest pulse timestamp in sharted memory
+
   //! update overall mode, given a component mode (radar, digitize, retain) has changed
   void update_mode(); 
 };

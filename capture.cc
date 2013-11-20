@@ -343,7 +343,7 @@ int main(int argc, char *argv[])
   if (!urx->set_active (true))
     perror ("urx->set_active");
 
-  cap = new capture_db(filename, "capture_new_data");
+  cap = new capture_db(filename, "capture_pulse_timestamp", "/capture_pulse_timestamp");
 
   // assume short-pulse mode for Bridgemaster E
 
