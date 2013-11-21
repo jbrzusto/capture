@@ -1,9 +1,10 @@
 # simple makefile to just get things working under linux
 
-CPPOPTS=-std=c++11 -O2
+CPPOPTS=-std=c++11  -fPIC -O2
+COPTS= -fPIC -O2
 USRP_INCLUDE=-I/home/radar/gnuradio/usrp/host/include -I/home/radar/gnuradio/usrp/firmware/include
 USRP_LIBS=-L/home/radar/gnuradio/usrp/host/lib -lusrp
-LIBS=-lpthread -lrt -lusb-1.0 -lboost_program_options -lboost_thread -lrt -lsqlite3
+LIBS=-lpthread -lrt -lusb-1.0 -lboost_program_options -lboost_thread -lsqlite3
 
 all: capture test_capture_db
 
@@ -20,7 +21,13 @@ capture.o: capture.cc capture_db.h
 	g++ $(CPPOPTS) $(USRP_INCLUDE) -o $@ -c capture.cc
 
 capture: capture.o capture_db.o
-	gcc -o $@ $^ $(USRP_LIBS) $(LIBS)
+	gcc $(COPTS) -o $@ $^ $(USRP_LIBS) $(LIBS)
 
 scan_converter.o: scan_converter.h scan_converter.cc
 	g++ $(CPPOPTS) -o $@ -c scan_converter.cc
+
+latest_pulse_timestamp.o: latest_pulse_timestamp.c
+	gcc $(COPTS) -o $@ -c latest_pulse_timestamp.c
+
+capture_lib.so: capture_lib.cc scan_converter.o latest_pulse_timestamp.o
+	g++ $(CPPOPTS) -I /usr/share/R/include -o $@ -shared $^ -lpthread -lrt
