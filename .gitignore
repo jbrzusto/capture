@@ -3,3 +3,4 @@
 *.sqlite
 test_capture_db
 capture
+*.so
