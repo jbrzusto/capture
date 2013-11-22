@@ -9,6 +9,7 @@ scan_converter::scan_converter ( int nr,
                                  int y0,
                                  int xc,
                                  int yc,
+                                 bool always_smooth_angular,
                                  double scale,
                                  double first_angle,
                                  double first_range
@@ -24,6 +25,7 @@ scan_converter::scan_converter ( int nr,
   scale(scale),
   first_angle(first_angle),
   first_range(first_range),
+  always_smooth_angular(always_smooth_angular),
   inds(0)
 {
   // create a scan converter for mapping polar to cartesian data
@@ -33,6 +35,7 @@ scan_converter::scan_converter ( int nr,
   // x0, y0: offset of output (sub) block in output buffer
   // xc, yc: offset of polar centre in output buffer (need not 
   //         be within the output sub block)
+  // always_smooth_angular: if true, always do smoothing across pulses
   // scale:  pixels per sample 
   // first_angle:  angle (in radians clockwise from the output horizontal axis) of the first row of source data
   // first_range:  range of first sample, measured in range-cell size.  This need not be an integer.
@@ -82,7 +85,7 @@ scan_converter::scan_converter ( int nr,
      the minimum sample range at and beyond which no such averaging is
      done */
 
-  angular_neighbour_thresh = (int) (1 + nr / (2 * M_PI * scale));
+  angular_neighbour_thresh = (int) (always_smooth_angular ?  nc * scale : (1 + nr / (2 * M_PI * scale)));
 
   l = 0; /* avoid a compiler warning */
   jhi = x0 + h;

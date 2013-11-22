@@ -63,6 +63,8 @@ class scan_converter {
 
   int xc, yc;  // offset in pixels from left/top of image buffer to centrepoint of source data
 
+  bool always_smooth_angular; // do we always use multi-pulse smoothing, regardless of range?
+
   double scale; // number of output slots per input slot along the cartesian axes
 
   double first_angle;  // (mathematical) angle of the first row of source data
@@ -81,6 +83,7 @@ class scan_converter {
 		   int y0,
 		   int xc,
 		   int yc,
+                   bool always_smooth_angular,
 		   double scale,
 		   double first_angle,
 		   double first_range

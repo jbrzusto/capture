@@ -17,19 +17,20 @@
 #include "scan_converter.h"
 
 scan_converter * _make_scan_converter (int nr,
-                                 int nc,
-                                 int w,
-                                 int h,
-                                 int x0,
-                                 int y0,
-                                 int xc,
-                                 int yc,
-                                 double scale,
-                                 double first_angle,
-                                 double first_range
+                                       int nc,
+                                       int w,
+                                       int h,
+                                       int x0,
+                                       int y0,
+                                       int xc,
+                                       int yc,
+                                       bool always_smooth_angular,
+                                       double scale,
+                                       double first_angle,
+                                       double first_range
                                        )
 {
-  return new scan_converter(nr, nc, w, h, x0, y0, xc, yc, scale, first_angle, first_range);
+  return new scan_converter(nr, nc, w, h, x0, y0, xc, yc, always_smooth_angular, scale, first_angle, first_range);
 };
 
 void _delete_scan_converter (scan_converter *sc) {
@@ -69,6 +70,7 @@ make_scan_converter (SEXP int_args, SEXP double_args) {
                         INTEGER(int_args)[5],
                         INTEGER(int_args)[6],
                         INTEGER(int_args)[7],
+                        INTEGER(int_args)[8],
                         REAL(double_args)[0],
                         REAL(double_args)[1],
                         REAL(double_args)[2]

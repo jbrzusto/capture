@@ -54,7 +54,7 @@ class capture_db {
   void record_geo (double ts, double lat, double lon, double alt, double heading);
 
   //! record data from a single pulse
-  void record_pulse (double ts, int trigs, double azi, double elev, double rot, void * buffer);
+  void record_pulse (double ts, int trigs, int n_ACPs, double azi, double elev, double rot, void * buffer);
 
   //! record a parameter setting
   void record_param (double ts, std::string param, double val);

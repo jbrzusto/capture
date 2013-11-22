@@ -13,6 +13,7 @@
 #include "capture_db.h"
 #include <iostream>
 #include <stdexcept>
+#include <iomanip>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
@@ -222,7 +223,7 @@ capture_db::record_geo (double ts, double lat, double lon, double elev, double h
   
 
 void 
-capture_db::record_pulse (double ts, int trigs, double azi, double elev, double rot, void * buffer) {
+capture_db::record_pulse (double ts, int trigs, int n_ACPs, double azi, double elev, double rot, void * buffer) {
   if (! st_record_pulse) {
     sqlite3_prepare_v2(db, "insert into pulses (sweep_key, mode_key, ts, trigs, azi, elev, rot, samples) values (?, ?, ?, ?, ?, ?, ?, ?)",
                      -1, & st_record_pulse, 0);
@@ -231,8 +232,10 @@ capture_db::record_pulse (double ts, int trigs, double azi, double elev, double 
     pulses_written_this_trans = 0;
   }
   
-  if (azi < last_azi)
+  if (azi < last_azi) {
     ++sweep_count;
+    // DEBUGGING:    std::cerr << "first pulse of new sweep: ts = " << std::setprecision(14) << ts << std::setprecision(3) << "; n_ACPs = " << n_ACPs << "; azi = " << azi << std::endl;
+  }
   
   sqlite3_reset (st_record_pulse);
   sqlite3_bind_double (st_record_pulse, 1, sweep_count);

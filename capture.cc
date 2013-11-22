@@ -365,7 +365,7 @@ int main(int argc, char *argv[])
 
   double ts = now();
   cap->record_geo(ts, 
-              45.372657, -64.404823, 30, // lat, long, alt of Fundy Force radar site
+              45.371907, -64.402584, 30, // lat, lon, alt of Fundy Force radar site
               0); // heading offset, in degrees
 
   cap->record_param(ts, "vid_gain", vid_gain);
@@ -409,7 +409,8 @@ do_capture  (usrp_bbprx_sptr urx, capture_db * cap, int n_samples)
 
     cap->record_pulse (ts, // timestamp at PC; okay for now, use better value combining RTC, USRP clocks as usrp_pulse_buffer does
                        meta.n_trigs,
-                       (meta.n_ACPs % 2048) * 360.0 / 2048.0,  // rough - based on 2048 ACPs per sweep
+                       meta.n_ACPs,
+                       (meta.n_ACPs % 2047) * 360.0 / 2047.0,  // rough - based on 2000 ACPs per sweep
                        0, // constant 0 elevation angle for FORCE radar
                        0, // constant polarization for FORCE radar
                        & buf[j][0]);
