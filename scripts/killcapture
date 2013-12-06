@@ -1,0 +1,5 @@
+#!/bin/sh
+killall capture
+killall R
+sleep 1
+killall capture
