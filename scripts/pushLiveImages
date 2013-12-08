@@ -1,0 +1,6 @@
+#!/bin/bash
+
+LOGDIR=/mnt/3tb/force_data
+LOGFILE=$LOGDIR/pushlog_`date +%Y-%m-%dT%H-%M-%S.%3N`.txt
+
+../pushLiveImages.R > $LOGFILE 2>&1 &
