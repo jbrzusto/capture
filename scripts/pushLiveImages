@@ -1,6 +1,8 @@
 #!/bin/bash
 
-LOGDIR=/mnt/3tb/force_data
+LOGDIR=/home/radar/data
+#LOGDIR=/mnt/3tb/force_data
 LOGFILE=$LOGDIR/pushlog_`date +%Y-%m-%dT%H-%M-%S.%3N`.txt
+CODEDIR=/home/radar/capture
 
-../pushLiveImages.R > $LOGFILE 2>&1 &
+$CODEDIR/pushLiveImages.R > $LOGFILE 2>&1 &

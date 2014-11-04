@@ -11,30 +11,44 @@
 ## to detect its closure and the start of a new one.
 
 ## -------------------- USER OPTIONS --------------------
+
+## each option can be replaced by a value specified on the command line
+
 ## Directory where the capture program stores its sqlite database files
 
-dbDir = "/mnt/3tb/force_data"
+##dbDir = "/mnt/3tb/force_data"
+dbDir = "/media/FORCE_radar_1/"
 
 ## Pulses per sweep: a kludgy way to achieve a fixed number of pulses
 ##   per sweep, currently needed by the scan converter.  The
 ##   Bridgemaster E operating in short pulse mode generates pulses @
 ##   1800 Hz and rotates at 28 RPM for a total of ~ 3857 pulses per
-##   sweep.
+##   sweep. We select down to 3600 pulses, which gives 0.1 degree
+##   azimuth resolution.
 
-pulsesPerSweep = 3980L
+pulsesPerSweep = 3600L
 
 ## Samples per pulse: set by the capture program script; at the full
-##   digitizing rate of 64 MHz, range per sample is 2.342 metres, so
-##   1024 samples takes us out to 2.398 km.  The capture program
+##   digitizing rate of 125 MHz, range per sample is 1.2 metres, so
+##   3000 samples takes us out to 3.6 km.  The capture program
 ##   script sets the samplesPerPulse.
 
-samplesPerPulse = 1024L
+samplesPerPulse = 3000L
+
+## Sampling Rate: base clock rate for samples.
+
+samplingRate = 125e6
+
+## Decimation rate: actual sample clock rate is obtained by
+## dividing samplingRate by decim.
+
+decimation = 1
 
 ## Overlay Image dimensions: we generate a square image, this many pixels
 ##   on a side.  Note that this many pixels corresponds to 2 * samplesPerPulse,
 ##   because the square image contains a circle of radius samplesPerPulse.
 
-imageSize = 1024L
+imageSize = 2048L
 
 ## Azimuth and Range Offsets: if the heading pulse is flaky, azimuth offset must
 ## be used to set the orientation - in radians.  This can be changed
@@ -48,15 +62,60 @@ aziRangeOffsets = c(164 * (pi / 180), 40)
 aziRangeOffsetsFile = "/home/radar/capture/aziRangeOffsets.txt"
 
 ## SCP Destination User / Host to which images are pushed via secure copy
-scpDestUser = "force-radar@discovery.acadiau.ca"
+scpDestUser = "force-radar@discovery"
 
 ## SCP Destination - folder on remote host to which images are pushed
 scpDestDir = "/home/www/html/htdocs/force/"
 
+argv = commandArgs(TRUE)
+
+while (length(argv) > 0) {
+    switch (argv[1],
+            "--dbdir" = {
+                dbDir = argv[2]
+                argv = argv[-(1:2)]
+            },
+            "--pulses" = {
+                pulsesPerSweep = as.numeric(argv[2])
+                argv = argv[-(1:2)]
+            },
+            "--samples" = {
+                samplesPerPulse = as.numeric(argv[2])
+                argv = argv[-(1:2)]
+            },
+            "--image_size" = {
+                imageSize = as.numeric(argv[2])
+                argv = argv[-(1:2)]
+            },
+            "--azi_offset" = {
+                aziRangeOffsets[1] = as.numeric(argv[2])
+                argv = argv[-(1:2)]
+            },
+            "--range_offset" = {
+                aziRangeOffsets[2] = as.numeric(argv[2])
+                argv = argv[-(1:2)]
+            },
+            "--sampling_rate" = {
+                samplingRate = as.numeric(argv[2])
+                argv = argv[-(1:2)]
+            },
+            "--decim" = {
+                decimation = as.numeric(argv[2])
+                argv = argv[-(1:2)]
+            },
+            {
+                stop("Unknown option", argv[1])
+            }
+            )
+}
+            
 ## -------------------- END OF USER OPTIONS --------------------
 
 ## total samples per sweep
 samplesPerSweep = as.integer(pulsesPerSweep * samplesPerPulse)
+
+## desired azimuths
+desiredAzi = (0:3599)/10
 
 ## Get all database filenames 
 
@@ -84,10 +143,10 @@ while (TRUE) {
   ## edge of data, as this can cause indefinite growth in the size of the sqlite write-ahead-log file and/or
   ## cache file(s).
   
-  ts = .Call("get_latest_pulse_timestamp") ## this is an atomic read from semaphore-protected shared memory
+##  ts = .Call("get_latest_pulse_timestamp") ## this is an atomic read from semaphore-protected shared memory
 
   ## get the key for the sweep before the one being filled now
-  sk = dbGetQuery(con, sprintf("select sweep_key from pulses where ts <= %f order by ts desc limit 1", ts))[1, 1] - 1
+  sk = dbGetQuery(con, sprintf("select distinct sweep_key from pulses order by sweep_key desc limit 2", ts))[2, 1]
   
   if (sk == last.sk || sk < 1)
     next
@@ -96,24 +155,23 @@ while (TRUE) {
 
   pal = readRDS("/home/radar/capture/radarImagePalette.rds")  ## low-overhead read of palette, to allow changing dynamically
 
-  ## get all pulses for this sweep; FIXME: this is a kludge - the scan converter requires a fixed number
-  ## of input pulses, so we always ask for 3900 pulses, and fill in any extra by replicating the last
-  x = dbGetQuery(con, sprintf("select * from pulses where sweep_key = %d order by ts limit %d", sk, pulsesPerSweep))
+  ## get all pulses for this sweep
+  x = dbGetQuery(con, sprintf("select * from pulses where sweep_key = %d order by ts", sk))
   options(digits=14)
-  cat(tail(x$ts, 1), file="FORCERadarTimestamp.txt")
+
+  ## get pulses uniformly spread around circle
+
+  keep = approx(x$azi,1:nrow(x),desiredAzi, method="constant", rule=2)$y
+  x=x[keep,]
   
   b = unlist(x$samples) ## concatenate the raw bytes for all pulses into a single raw vector
   
-  pulsesMissing = (samplesPerSweep - length(b) / 2) / samplesPerPulse ## each sample is 2 bytes
-
-  if (pulsesMissing > 0) {
-    ## KLUDGE: replicate the last pulse the required number of times
-    b = c(b, rep(tail(b, 2 * samplesPerPulse), times=pulsesMissing))
-  }
-
   lastAziRangeOffsets = aziRangeOffsets
   if (file.exists(aziRangeOffsetsFile))
     aziRangeOffsets = scan(aziRangeOffsetsFile, sep=",", quiet=TRUE)
+
+  ## output timestamp of last pulse, and azi/range offsets
+  cat(sprintf("{\n  \"ts\": %.3f,\n  \"samplesPerPulse\": %d,\n  \"pulsesPerSweep\": %d,\n  \"imageSize\": %d,\n  \"aziOffset\": %f,\n  \"rangeOffset\": %f,\n  \"samplingRate\": %f\n}", tail(x$ts, 1), samplesPerPulse, pulsesPerSweep, imageSize, aziRangeOffsets[1], aziRangeOffsets[2], samplingRate / decimation ), file=file.path(dbDir, "FORCERadarSweepMetadata.txt"))
 
   ## if necessary, regenerate scan converter
   if (is.null(scanConv) || ! identical(aziRangeOffsets, lastAziRangeOffsets)) {
@@ -123,11 +181,14 @@ while (TRUE) {
     scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, imageSize, imageSize, 0, 0, imageSize / 2, imageSize / 2, TRUE)), c(imageSize / (2 * samplesPerPulse), aziRangeOffsets[1] * pi/180, aziRangeOffsets[2]))
   }
 
-  .Call("apply_scan_converter", scanConv, b, pix, pal, c(imageSize, 4L))
+  .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(imageSize, 6L)))
 
-  writePNG(pix, "currentFORCERadarImage.png")
-  system(sprintf("scp -q currentFORCERadarImage.png %s:%s", scpDestUser, scpDestDir))
-  system(sprintf("scp -q FORCERadarTimestamp.txt %s:%s", scpDestUser, scpDestDir))
+  ## Note: write PNG to newFORCERadarImage.png, then rename to currentFORCERadarImage.png so that
+  ##
+  pngFile = file(file.path(dbDir, "currentFORCERadarImage.png"), "wb")
+  writePNG(pix, pngFile)
+  close(pngFile)
+  system(sprintf("scp -q %s/currentFORCERadarImage.png %s/FORCERadarSweepMetadata.txt %s:%s", dbDir, dbDir, scpDestUser, scpDestDir))
   ## rename 'current' to plain version; this is done atomically, so that if the web server
   ## process is serving the file, it serves either the complete previous image, or the complete new
   ## image, rather than a partial or corrupt image.

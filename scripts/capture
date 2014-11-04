@@ -1,20 +1,61 @@
 #!/bin/bash
 
-# start capturing radar data, storing it in /mnt/3tb/force_data/TODAY's DATE.sqlite
+# start capturing radar data
 
-# ugly hard-wired signal characteristics!
+# filename template
+DATE=`date +"%Y-%m-%dT%H-%M-%S.%3N"`
+OUTFILE="force_$DATE.sqlite"
+LOGFILE="pushlog_$DATE.txt"
 
-OUTFILE=`date +"force%Y-%m-%dT%H-%M-%S.%3N.sqlite"`
+# samples per pulse
+NUMSAMP=3000
 
-# the decimation parameter -d 0 sets sampling rate (64e6 / (d+1)) and hence range resolution 3.0e8 / (64e6 / (d+1)) / 2
-# so d=0 gives 2.34375 metres
+# decimation rate (1, 2, 8, ...)
+DECIM=1
+
+# transfer port - the port used on local ethernet transfer
+# from redpitaya digitizer to this computer
+PORT=12345
+
+# set the output directory
+if [[ -d /media/FORCE_radar_1 ]]; then
+    DATADIR=/media/FORCE_radar_1
+elif [[ -d /media/FORCE_radar_2 ]]; then
+    DATADIR=/media/FORCE_radar_2
+else
+    DATADIR=/home/radar/data
+fi
+
+# parse parameters
+# -d DECIM : decimation rate.  Must be 1, 2, or 8 to get every sample, averages of every 2 samples, or averages of every 8 samples.
+# the decimation parameter -d sets sampling rate (125e6 / d) and hence range resolution 3.0e8 / (125e6 / d) / 2
+# so d=1 gives 1.2 metres
+
+if [[ "$1" == "-d" ]]; then
+    DECIM=$2
+    shift 2
+fi
+
+if [[ "$1" == "-n" ]]; then
+    NUMSAMP=$2
+    shift 2;
+fi
 
 # the -n parameter is the number of samples per pulse to capture, so at the above resolution,
-# the total range is 1024 * 2.34375 = 2.4 km
-#
-# the various trigger and azimuth parameters specify the nature of these signals coming from
-# the radar, and should not be changed
-#
-# video gain is set to 0, but can be increased to improve resolution of weak features
+# the total range is 3000 * 1.2 = 3.6 km
 
-/home/radar/capture/capture -T --azimuth-gain 20 --azimuth-thresh-relax 30 --azimuth-thresh-excite 10  --trig-delay 0 --trig-latency 5000 --trigger-gain 20 --trig-thresh-excite 32 --trig-thresh-relax 35  --video-gain 0 -d 0 -n 1024 /mnt/3tb/force_data/$OUTFILE &
+# Listen on port PORT for raw pulse data from the redpitaya digitizer, and pipe this into
+# the capture process.  "-d" means don't hang up on no stdin, which is required for running
+# netcat in background as a pure listener
+
+( netcat -d -l $PORT | /home/radar/capture/rpcapture -d $DECIM -n $NUMSAMP -T $DATADIR/$OUTFILE) &
+
+sleep 1
+
+# start the digdar digitizing process on the redpitaya
+ssh -f root@rp "(/opt/bin/digdar -d $DECIM -n $NUMSAMP | /opt/bin/netcat 10.42.0.2 $PORT)&"
+
+sleep 1
+
+# start generating and pushing live images
+/home/radar/capture/pushLiveImages.R --samples $NUMSAMP --sampling_rate 125e6 --decim $DECIM > $DATADIR/$LOGFILE 2>&1 &
