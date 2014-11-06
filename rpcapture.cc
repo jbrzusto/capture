@@ -222,8 +222,6 @@ do_capture  (capture_db * cap, int n_samples)
 
     double ts = now();
 
-    float azi;
-
     // calculate azimuth based on count of ACPs since most recent ARP.
 
     cap->record_pulse (ts, // timestamp at PC; okay for now, use better value combining RTC, digitizer clocks
