@@ -80,20 +80,20 @@ capture_db::ensure_tables() {
      mode_key integer references modes (mode_key),                                                     -- additional pulse metadata describing sampling rate etc.
      ts double,                                                                                        -- timestamp for start of pulse
      trigs integer,                                                                                    -- trigger count, for detecting dropped pulses
-     azi double,                                                                                       -- azimuth of pulse, relative to start of heading pulse (radians)
-     elev double,                                                                                      -- elevation angle (radians)
-     rot double,                                                                                       -- rotation of waveguide (polarization - radians)
+     azi float,                                                                                        -- azimuth of pulse, relative to start of heading pulse (radians)
+     elev float,                                                                                       -- elevation angle (radians)
+     rot float,                                                                                        -- rotation of waveguide (polarization - radians)
      samples BLOB                                                                                      -- digitized samples for each pulse
    );
    create unique index if not exists pulses_ts on pulses (ts);                                         -- fast lookup of pulses by timestamp
    create index if not exists pulses_sweep on pulses (sweep_key);                                      -- fast lookup of pulses by sweep #
 
    create table if not exists geo (                                                                    -- geographic location of radar itself, over time
-     ts double,                                                                                        -- timestamp for this geometry record
-     lat double,                                                                                       -- latitude of radar (degrees N)
-     lon double,                                                                                       -- longitude of radar (degrees E)
-     alt double,                                                                                       -- altitude (m ASL)
-     heading double                                                                                    -- heading pulse orientation (degrees clockwise from true north)
+     ts float,                                                                                        -- timestamp for this geometry record
+     lat float,                                                                                       -- latitude of radar (degrees N)
+     lon float,                                                                                       -- longitude of radar (degrees E)
+     alt float,                                                                                       -- altitude (m ASL)
+     heading float                                                                                    -- heading pulse orientation (degrees clockwise from true north)
    );
    create unique index if not exists geo_ts on geo (ts);                                               -- fast lookup of geography by timestamp
 
@@ -108,17 +108,17 @@ capture_db::ensure_tables() {
 
   create table if not exists radar_modes (                                                             -- radar modes
      radar_mode_key integer not null primary key,                                                      -- unique ID of radar mode
-     power double,                                                                                     -- power of pulses (kW)
-     plen double,                                                                                      -- pulse length (nanoseconds)
-     prf double,                                                                                       -- nominal PRF (Hz)
-     rpm double                                                                                        -- rotations per minute
+     power float,                                                                                     -- power of pulses (kW)
+     plen float,                                                                                      -- pulse length (nanoseconds)
+     prf float,                                                                                       -- nominal PRF (Hz)
+     rpm float                                                                                        -- rotations per minute
    );
 
   create unique index if not exists i_radar_modes on radar_modes (power, plen, prf, rpm);              -- fast lookup of all range records in one retain mode
 
    create table if not exists digitize_modes (                                                         -- digitizing modes
      digitize_mode_key integer not null primary key,                                                   -- unique ID of digitizing mode
-     rate double,                                                                                      -- rate of pulse sampling (MHz)
+     rate float,                                                                                       -- rate of pulse sampling (MHz)
      format integer,                                                                                   -- sample format: (low 8 bits is bits per sample; high 8 bits is flags)
                                                                                                        -- e.g 8: 8-bit
                                                                                                        --    16: 16-bit
@@ -223,7 +223,7 @@ capture_db::record_geo (double ts, double lat, double lon, double elev, double h
   
 
 void 
-capture_db::record_pulse (double ts, int trigs, int n_ACPs, double azi, double elev, double rot, void * buffer) {
+capture_db::record_pulse (double ts, uint32_t trigs, float azi, float elev, float rot, void * buffer) {
   if (! st_record_pulse) {
     sqlite3_prepare_v2(db, "insert into pulses (sweep_key, mode_key, ts, trigs, azi, elev, rot, samples) values (?, ?, ?, ?, ?, ?, ?, ?)",
                      -1, & st_record_pulse, 0);
@@ -238,8 +238,8 @@ capture_db::record_pulse (double ts, int trigs, int n_ACPs, double azi, double e
   }
   
   sqlite3_reset (st_record_pulse);
-  sqlite3_bind_double (st_record_pulse, 1, sweep_count);
-  sqlite3_bind_double (st_record_pulse, 2, mode);
+  sqlite3_bind_int (st_record_pulse, 1, sweep_count);
+  sqlite3_bind_int (st_record_pulse, 2, mode);
   sqlite3_bind_double (st_record_pulse, 3, ts);
   sqlite3_bind_int    (st_record_pulse, 4, trigs);
   sqlite3_bind_double (st_record_pulse, 5, azi);

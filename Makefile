@@ -1,12 +1,12 @@
 # simple makefile to just get things working under linux
 
-CPPOPTS=-std=c++11  -fPIC -O2
-COPTS= -fPIC -O2
-# CPPOPTS=-std=c++11  -fPIC -g3
-# COPTS= -fPIC -g3
+#CPPOPTS=-std=c++11  -fPIC -O2
+#COPTS= -fPIC -O2
+CPPOPTS=-std=c++11  -fPIC -g3
+COPTS= -fPIC -g3
 USRP_INCLUDE=-I/home/radar/gnuradio/usrp/host/include -I/home/radar/gnuradio/usrp/firmware/include
 USRP_LIBS=-L/home/radar/gnuradio/usrp/host/lib -lusrp
-LIBS=-lpthread -lrt -lusb-1.0 -lboost_program_options -lboost_thread -lsqlite3
+LIBS=-lpthread -lrt -lboost_program_options -lboost_thread -lsqlite3
 
 all: capture test_capture_db
 
@@ -22,14 +22,14 @@ test_capture_db: capture_db.o test_capture_db.cc
 capture.o: capture.cc capture_db.h
 	g++ $(CPPOPTS) $(USRP_INCLUDE) -o $@ -c capture.cc
 
-rpcapture.o: rpcapture.cc capture_db.h
+rpcapture.o: rpcapture.cc capture_db.h pulse_metadata.h
 	g++ $(CPPOPTS) $(USRP_INCLUDE) -o $@ -c rpcapture.cc
 
 capture: capture.o capture_db.o
 	gcc $(COPTS) -o $@ $^ $(USRP_LIBS) $(LIBS)
 
 rpcapture: rpcapture.o capture_db.o
-	gcc $(COPTS) -o $@ $^ $(USRP_LIBS) $(LIBS)
+	g++ $(COPTS) -o $@ $^ $(LIBS)
 
 scan_converter.o: scan_converter.h scan_converter.cc
 	g++ $(CPPOPTS) -o $@ -c scan_converter.cc

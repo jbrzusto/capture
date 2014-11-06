@@ -21,8 +21,10 @@ if [[ -d /media/FORCE_radar_1 ]]; then
     DATADIR=/media/FORCE_radar_1
 elif [[ -d /media/FORCE_radar_2 ]]; then
     DATADIR=/media/FORCE_radar_2
-else
+elif [[ -d /home/radar/data ]]; then
     DATADIR=/home/radar/data
+else
+    DATADIR=.
 fi
 
 # filename template
@@ -42,8 +44,7 @@ REMOVE=""
 # start capturing radar data
 
 if [[ "$1" == "--help" || "$1" == "-h" ]]; then
-    echo <<EOF
-
+    cat <<EOF
 capture: start capturing radar data.
 (use killcapture to stop capturing)
 
@@ -100,6 +101,7 @@ These processes are all stopped by the killcapture script.
 The digdar digitizer and this computer commmunicate via a TCP connection on port $PORT.
 
 EOF
+
     exit 1
 fi
 
@@ -129,6 +131,7 @@ done
 # the capture process.  "-d" means don't hang up on no stdin, which is required for running
 # netcat in background as a pure listener
 
+killall netcat
 ( netcat -d -l $PORT | /home/radar/capture/rpcapture -d $DECIM -n $NUMSAMP -T $DATADIR/$OUTFILE) &
 
 sleep 1

@@ -54,8 +54,6 @@
 #include <assert.h>
 #include <math.h>
 #include <signal.h>
-#include "fpga_regs_common.h"
-#include "fpga_regs_bbprx.h"
 #include <boost/program_options.hpp>
 #include "capture_db.h"
 #include "pulse_metadata.h"
@@ -227,23 +225,10 @@ do_capture  (capture_db * cap, int n_samples)
     float azi;
 
     // calculate azimuth based on count of ACPs since most recent ARP.
-    if (got_arp) {
-      if (meta->num_arp != num_arp) {
-        num_arp = meta->num_arp;
-        num_acp_at_arp = meta->num_acp;
-      }
-      uint32_t acp_since_arp = meta->num_acp - num_acp_at_arp;
-      azi = acp_since_arp / 4096.0 * 360.0;  // based on 4096 ACPs per sweep ; FIXME: 
-    } else {
-      num_arp = meta->num_arp;
-      got_arp = true;
-      azi = 0.0;
-    }
 
     cap->record_pulse (ts, // timestamp at PC; okay for now, use better value combining RTC, digitizer clocks
                        meta->num_trig,
-                       meta->num_acp,
-                       azi,
+                       meta->acp_clock,
                        0, // constant 0 elevation angle for FORCE radar
                        0, // constant polarization for FORCE radar
                        (uint16_t *) & pulsebuf[sizeof(pulse_metadata) - sizeof(uint16_t)]);
