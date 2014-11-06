@@ -1,21 +1,20 @@
 #!/bin/bash
+# see the help message below for details
 
-# start capturing radar data
+# local interface on subnet to which digdar digitizer is
+# attached
 
-# filename template
-DATE=`date +"%Y-%m-%dT%H-%M-%S.%3N"`
-OUTFILE="force_$DATE.sqlite"
-LOGFILE="pushlog_$DATE.txt"
+LOCALHOST=10.42.0.2
 
-# samples per pulse
-NUMSAMP=3000
-
-# decimation rate (1, 2, 8, ...)
-DECIM=1
+# address of digdar digitizer
+DIGDARHOST=10.42.0.56
 
 # transfer port - the port used on local ethernet transfer
 # from redpitaya digitizer to this computer
 PORT=12345
+
+# sampling rate of the digdar digitizer
+SAMPLING_RATE=125.000E6
 
 # set the output directory
 if [[ -d /media/FORCE_radar_1 ]]; then
@@ -26,10 +25,85 @@ else
     DATADIR=/home/radar/data
 fi
 
-# parse parameters
-# -d DECIM : decimation rate.  Must be 1, 2, or 8 to get every sample, averages of every 2 samples, or averages of every 8 samples.
-# the decimation parameter -d sets sampling rate (125e6 / d) and hence range resolution 3.0e8 / (125e6 / d) / 2
-# so d=1 gives 1.2 metres
+# filename template
+DATE=`date +"%Y-%m-%dT%H-%M-%S.%3N"`
+OUTFILE="force_$DATE.sqlite"
+LOGFILE="pushlog_$DATE.txt"
+
+# default samples per pulse
+NUMSAMP=3000
+
+# default decimation rate (1, 2, 8, ...)
+DECIM=1
+
+# default removal is none
+REMOVE=""
+
+# start capturing radar data
+
+if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+    echo <<EOF
+
+capture: start capturing radar data.
+(use killcapture to stop capturing)
+
+Call like so:
+
+  capture [-d DECIM] [-n SAMPLES] [-r BEGIN:END]*
+
+where:
+
+  - DECIM is the decimation rate.  With the base clock rate of 125
+    MHz,
+
+      DECIM = 1  => range resolution = 1.2 metres
+      DECIM = 2  => range resolution = 2.4 metres
+      DECIM = 8  => range resolution = 9.6 metres
+
+    These are the only sensible permitted values, currently.
+    Default value: $DECIM
+
+  - SAMPLES is the number of samples to capture per pulse.  When
+    multiplied by the range resolution, gives the total range we
+    capture out to.  Default value: $NUMSAMP
+
+  - BEGIN:END specify portions of the circle to *not* capture.  BEGIN
+    and END are both numbers in [0, 1]
+
+       If BEGIN < END, pulses with azimuth in the range [BEGIN, END]
+       are discarded.
+
+       If BEGIN > END, pulse with azimuth in the ranges [0, END] and
+       [BEGIN, 1] are discarded.
+
+    i.e. all pulses in the clockwise sector from BEGIN to END are
+    excluded
+
+    The default, if no -r options is given, is to save all pulses.
+    Multiple -r options are permitted, and a pulse is removed
+    (discarded) if it belongs to any of the specified azimuth ranges.
+
+    Note that azimuths 0 and 1 correspond to the same point, namely
+    the start of the radar's heading pulse, i.e. when the beam is
+    pointing toward the front of the radar unit.
+
+This command starts the following processes:
+ - a digitizing process on the local redpitaya / digdar digitizer, which
+   must be on the local area network at address $DIGDARHOST
+
+ - a capture process on this computer, which stores captured pulses in a database
+   with a filename of the form $DATADIR/$OUTFILE
+
+ - a process to generate and push sweep images to the server at discovery.acadiau.ca
+
+These processes are all stopped by the killcapture script.
+The digdar digitizer and this computer commmunicate via a TCP connection on port $PORT.
+
+EOF
+    exit 1
+fi
+
+# parse parameters, which must be in the order specified
 
 if [[ "$1" == "-d" ]]; then
     DECIM=$2
@@ -41,8 +115,15 @@ if [[ "$1" == "-n" ]]; then
     shift 2;
 fi
 
-# the -n parameter is the number of samples per pulse to capture, so at the above resolution,
-# the total range is 3000 * 1.2 = 3.6 km
+while [[ "$1" != "" ]]; do
+    if [[ "$1" == "-r" ]]; then
+        REMOVE="$REMOVE $1 $2"
+        shift 2;
+    else
+        echo "Error: invalid argument: $1.\n  Do capture -h for help."
+        exit 1
+    fi
+done
 
 # Listen on port PORT for raw pulse data from the redpitaya digitizer, and pipe this into
 # the capture process.  "-d" means don't hang up on no stdin, which is required for running
@@ -53,9 +134,7 @@ fi
 sleep 1
 
 # start the digdar digitizing process on the redpitaya
-ssh -f root@rp "(/opt/bin/digdar -d $DECIM -n $NUMSAMP | /opt/bin/netcat 10.42.0.2 $PORT)&"
-
-sleep 1
+ssh -f root@$DIGDARHOST "(/opt/bin/digdar -d $DECIM -n $NUMSAMP $REMOVE | /opt/bin/netcat $LOCALHOST $PORT)&"
 
 # start generating and pushing live images
 /home/radar/capture/pushLiveImages.R --samples $NUMSAMP --sampling_rate 125e6 --decim $DECIM > $DATADIR/$LOGFILE 2>&1 &

@@ -127,7 +127,21 @@ dbFile = dbFiles[order(file.info(dbFiles)$mtime, decreasing=TRUE)[1]]
 dyn.load("/home/radar/capture/capture_lib.so") 
 library(RSQLite)
 library(png)
-con = dbConnect("SQLite", dbFile)
+
+## loop for a while, trying to connect; the db is initially locked by rpcapture
+
+con = NULL
+while (is.null(con)) {
+    tryCatch (
+        {
+            con = dbConnect("SQLite", dbFile)
+        },
+        error = function(e) {
+            Sys.sleep(1)
+        }
+        )
+}
+
 pix = matrix(0L, imageSize, imageSize)
 class(pix)="nativeRaster"
 attr(pix, "channels") = 4
