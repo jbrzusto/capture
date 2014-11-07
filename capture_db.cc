@@ -23,7 +23,7 @@ capture_db::capture_db (std::string filename, std::string sem_name, std::string 
   pulses_per_transaction(512),
   radar_mode (-1),
   digitize_mode (-1),
-  last_azi(1000), // larger than any real value, so first pulse always begins a new sweep
+  last_num_arp(0xffffffff), // start at large value, so first pulse begins a new sweep
   sweep_count(0),
   st_record_pulse(0)
 {
@@ -75,7 +75,7 @@ void
 capture_db::ensure_tables() {
   sqlite3_exec(db,  R"(
      create table if not exists pulses (                                                               -- digitized pulses
-     pulse_key integer not null primary key,                                                           -- unique ID for this pulse
+     pulse_key integer not null primary key autoincrement,                                             -- unique ID for this pulse
      sweep_key integer not null,                                                                       -- groups together pulses from same sweep
      mode_key integer references modes (mode_key),                                                     -- additional pulse metadata describing sampling rate etc.
      ts double,                                                                                        -- timestamp for start of pulse
@@ -223,7 +223,7 @@ capture_db::record_geo (double ts, double lat, double lon, double elev, double h
   
 
 void 
-capture_db::record_pulse (double ts, uint32_t trigs, float azi, float elev, float rot, void * buffer) {
+capture_db::record_pulse (double ts, uint32_t trigs, float azi, uint32_t num_arp, float elev, float rot, void * buffer) {
   if (! st_record_pulse) {
     sqlite3_prepare_v2(db, "insert into pulses (sweep_key, mode_key, ts, trigs, azi, elev, rot, samples) values (?, ?, ?, ?, ?, ?, ?, ?)",
                      -1, & st_record_pulse, 0);
@@ -232,8 +232,9 @@ capture_db::record_pulse (double ts, uint32_t trigs, float azi, float elev, floa
     pulses_written_this_trans = 0;
   }
   
-  if (azi < last_azi - 0.01) {
+  if (num_arp != last_num_arp) {
     ++sweep_count;
+    last_num_arp = num_arp;
     // DEBUGGING:    std::cerr << "first pulse of new sweep: ts = " << std::setprecision(14) << ts << std::setprecision(3) << "; n_ACPs = " << n_ACPs << "; azi = " << azi << std::endl;
   }
   
@@ -251,8 +252,6 @@ capture_db::record_pulse (double ts, uint32_t trigs, float azi, float elev, floa
     // FIXME: figure out which bytes to copy
   }
   sqlite3_step (st_record_pulse);
-
-  last_azi = azi;
 
   ++pulses_written_this_trans;
   if (pulses_written_this_trans == pulses_per_transaction) {

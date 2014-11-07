@@ -54,7 +54,7 @@ class capture_db {
   void record_geo (double ts, double lat, double lon, double alt, double heading);
 
   //! record data from a single pulse
-  void record_pulse (double ts, uint32_t trigs, float azi, float elev, float rot, void * buffer);
+  void record_pulse (double ts, uint32_t trigs, float azi, uint32_t num_arp, float elev, float rot, void * buffer);
 
   //! record a parameter setting
   void record_param (double ts, std::string param, double val);
@@ -82,7 +82,7 @@ class capture_db {
   int digitize_ns; //!< current digitizer number of samples per pulse
   int digitize_num_bytes; //!< current digitizer number of bytes per pulse
 
-  double last_azi; //!< last azimuth for which a pulse was recorded
+  uint32_t last_num_arp; //!< ARP count from previous pulse; a change here means we're on a new sweep
   long long int sweep_count; //!< sweep count
 
   sqlite3 * db; //<! handle to sqlite connection

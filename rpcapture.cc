@@ -227,6 +227,7 @@ do_capture  (capture_db * cap, int n_samples)
     cap->record_pulse (ts, // timestamp at PC; okay for now, use better value combining RTC, digitizer clocks
                        meta->num_trig,
                        meta->acp_clock,
+                       meta->num_arp,
                        0, // constant 0 elevation angle for FORCE radar
                        0, // constant polarization for FORCE radar
                        (uint16_t *) & pulsebuf[sizeof(pulse_metadata) - sizeof(uint16_t)]);
