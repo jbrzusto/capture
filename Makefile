@@ -1,9 +1,9 @@
 # simple makefile to just get things working under linux
 
-#CPPOPTS=-std=c++11  -fPIC -O2
-#COPTS= -fPIC -O2
-CPPOPTS=-std=c++11  -fPIC -g3
-COPTS= -fPIC -g3
+CPPOPTS=-std=c++11  -fPIC -O2
+COPTS= -fPIC -O2
+#CPPOPTS=-std=c++11  -fPIC -g3
+#COPTS= -fPIC -g3
 USRP_INCLUDE=-I/home/radar/gnuradio/usrp/host/include -I/home/radar/gnuradio/usrp/firmware/include
 USRP_LIBS=-L/home/radar/gnuradio/usrp/host/lib -lusrp
 LIBS=-lpthread -lrt -lboost_program_options -lboost_thread -lsqlite3

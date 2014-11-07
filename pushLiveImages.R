@@ -17,8 +17,7 @@
 ## Directory where the capture program stores its sqlite database files
 
 ##dbDir = "/mnt/3tb/force_data"
-#dbDir = "/media/FORCE_radar_1/"
-dbDir="."
+dbDir = "/media/FORCE_radar_1/"
 
 ## Pulses per sweep: a kludgy way to achieve a fixed number of pulses
 ##   per sweep, currently needed by the scan converter.  The
@@ -116,7 +115,7 @@ while (length(argv) > 0) {
 samplesPerSweep = as.integer(pulsesPerSweep * samplesPerPulse)
 
 ## desired azimuths
-desiredAzi = (0:3599)/10
+desiredAzi = (0:3599)/3600
 
 ## Get all database filenames 
 

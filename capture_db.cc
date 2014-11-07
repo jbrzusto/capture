@@ -232,7 +232,7 @@ capture_db::record_pulse (double ts, uint32_t trigs, float azi, float elev, floa
     pulses_written_this_trans = 0;
   }
   
-  if (azi < last_azi) {
+  if (azi < last_azi - 0.01) {
     ++sweep_count;
     // DEBUGGING:    std::cerr << "first pulse of new sweep: ts = " << std::setprecision(14) << ts << std::setprecision(3) << "; n_ACPs = " << n_ACPs << "; azi = " << azi << std::endl;
   }
