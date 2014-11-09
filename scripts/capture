@@ -16,15 +16,17 @@ PORT=12345
 # sampling rate of the digdar digitizer
 SAMPLING_RATE=125.000E6
 
-# set the output directory
-if [[ -d /media/FORCE_radar_1 ]]; then
-    DATADIR=/media/FORCE_radar_1
-elif [[ -d /media/FORCE_radar_2 ]]; then
-    DATADIR=/media/FORCE_radar_2
-elif [[ -d /home/radar/data ]]; then
-    DATADIR=/home/radar/data
-else
-    DATADIR=.
+# set the output directory, if not already
+if [[ "$DATADIR" == "" ]]; then
+    if [[ -d /media/FORCE_radar_1 ]]; then
+        DATADIR=/media/FORCE_radar_1
+    elif [[ -d /media/FORCE_radar_2 ]]; then
+        DATADIR=/media/FORCE_radar_2
+    elif [[ -d /home/radar/data ]]; then
+        DATADIR=/home/radar/data
+    else
+        DATADIR=.
+    fi
 fi
 
 # filename template
@@ -167,4 +169,4 @@ sleep 1
 ssh -f root@$DIGDARHOST "(/opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNKSIZE '$REMOVE' | /opt/bin/netcat $LOCALHOST $PORT)&"
 
 # start generating and pushing live images
-/home/radar/capture/pushLiveImages.R --samples $NUMSAMP --sampling_rate 125e6 --decim $DECIM > $DATADIR/$LOGFILE 2>&1 &
+#/home/radar/capture/pushLiveImages.R --samples $NUMSAMP --sampling_rate 125e6 --decim $DECIM > $DATADIR/$LOGFILE 2>&1 &
