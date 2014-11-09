@@ -38,6 +38,12 @@ NUMSAMP=3000
 # default decimation rate (1, 2, 8, ...)
 DECIM=1
 
+# default number of pulses in ring buffer
+PULSES=4000
+
+# default number of pulses to transfer per chunk
+CHUNKSIZE=100
+
 # default removal is none
 REMOVE=""
 
@@ -50,7 +56,7 @@ capture: start capturing radar data.
 
 Call like so:
 
-  capture [-d DECIM] [-n SAMPLES] [-r BEGIN:END]*
+  capture [-d DECIM] [-n SAMPLES] [-p PULSES] [-c CHUNKSIZE] [-r BEGIN:END]*
 
 where:
 
@@ -67,6 +73,12 @@ where:
   - SAMPLES is the number of samples to capture per pulse.  When
     multiplied by the range resolution, gives the total range we
     capture out to.  Default value: $NUMSAMP
+
+  - PULSES is how many pulses to allocate in the ring buffer on the
+    digitizer.  Default value: $PULSES
+
+  - CHUNKSIZE is the number of pulses to transfer at a time.  This must
+    divide evenly into PULSES.  Default value: $CHUNKSIZE.
 
   - BEGIN:END specify portions of the circle to *not* capture.  BEGIN
     and END are both numbers in [0, 1]
@@ -117,6 +129,21 @@ if [[ "$1" == "-n" ]]; then
     shift 2;
 fi
 
+if [[ "$1" == "-p" ]]; then
+    PULSES=$2
+    shift 2;
+fi
+
+if [[ "$1" == "-c" ]]; then
+    CHUNKSIZE=$2
+    shift 2;
+fi
+
+if (( $PULSES % $CHUNKSIZE != 0 )); then
+    echo "Error: CHUNKSIZE must divide evenly into PULSES"
+    exit 1
+fi
+
 while [[ "$1" != "" ]]; do
     if [[ "$1" == "-r" ]]; then
         REMOVE="$REMOVE $1 $2"
@@ -137,7 +164,7 @@ killall netcat
 sleep 1
 
 # start the digdar digitizing process on the redpitaya
-ssh -f root@$DIGDARHOST "(/opt/bin/digdar -d $DECIM -n $NUMSAMP '$REMOVE' | /opt/bin/netcat $LOCALHOST $PORT)&"
+ssh -f root@$DIGDARHOST "(/opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNKSIZE '$REMOVE' | /opt/bin/netcat $LOCALHOST $PORT)&"
 
 # start generating and pushing live images
 /home/radar/capture/pushLiveImages.R --samples $NUMSAMP --sampling_rate 125e6 --decim $DECIM > $DATADIR/$LOGFILE 2>&1 &
