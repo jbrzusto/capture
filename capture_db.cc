@@ -80,6 +80,7 @@ capture_db::ensure_tables() {
      mode_key integer references modes (mode_key),                                                     -- additional pulse metadata describing sampling rate etc.
      ts double,                                                                                        -- timestamp for start of pulse
      trigs integer,                                                                                    -- trigger count, for detecting dropped pulses
+     trig_clock integer,                                                                               -- for accurate timing since start of sweep
      azi float,                                                                                        -- azimuth of pulse, relative to start of heading pulse (radians)
      elev float,                                                                                       -- elevation angle (radians)
      rot float,                                                                                        -- rotation of waveguide (polarization - radians)
@@ -223,9 +224,9 @@ capture_db::record_geo (double ts, double lat, double lon, double elev, double h
   
 
 void 
-capture_db::record_pulse (double ts, uint32_t trigs, float azi, uint32_t num_arp, float elev, float rot, void * buffer) {
+capture_db::record_pulse (double ts, uint32_t trigs, uint32_t trig_clock, float azi, uint32_t num_arp, float elev, float rot, void * buffer) {
   if (! st_record_pulse) {
-    sqlite3_prepare_v2(db, "insert into pulses (sweep_key, mode_key, ts, trigs, azi, elev, rot, samples) values (?, ?, ?, ?, ?, ?, ?, ?)",
+    sqlite3_prepare_v2(db, "insert into pulses (sweep_key, mode_key, ts, trigs, azi, elev, rot, trig_clock, samples) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                      -1, & st_record_pulse, 0);
 
     sqlite3_exec (db, "begin transaction", 0, 0, 0);
@@ -246,8 +247,9 @@ capture_db::record_pulse (double ts, uint32_t trigs, float azi, uint32_t num_arp
   sqlite3_bind_double (st_record_pulse, 5, azi);
   sqlite3_bind_double (st_record_pulse, 6, elev);
   sqlite3_bind_double (st_record_pulse, 7, rot);
+  sqlite3_bind_int    (st_record_pulse, 8, trig_clock);
   if (is_full_retain_mode()) {
-    sqlite3_bind_blob (st_record_pulse, 8, buffer, digitize_num_bytes, SQLITE_STATIC); 
+    sqlite3_bind_blob (st_record_pulse, 9, buffer, digitize_num_bytes, SQLITE_STATIC); 
   } else {
     // FIXME: figure out which bytes to copy
   }
