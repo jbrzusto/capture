@@ -177,8 +177,8 @@ int main(int argc, char *argv[])
   // record digitizing mode
   cap->set_digitize_mode( 125e6 / decim, // digitizing rate, Hz
                          16,   // only uses lowest 14 bits when truncated average
-                          n_samples,  // samples per pulse
-                          ((decim <= 4) ? decim : 1 ) * (1<<14 - 1) // scale: max sample value possible
+                          ((decim <= 4) ? decim : 1 ) * (1<<14 - 1), // scale: max sample value possible
+                          n_samples  // samples per pulse
                          );
 
   cap->set_retain_mode ("full"); // keep all samples from all pulses
