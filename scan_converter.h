@@ -95,7 +95,7 @@ class scan_converter {
               t_pixel *pix,
               int span,
               t_palette *pal,
-              int sample_shift
+              int sample_scale
               );
   
  protected:

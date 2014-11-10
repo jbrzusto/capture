@@ -39,7 +39,7 @@ class capture_db {
   void set_radar_mode (double power, double plen, double prf, double rpm);
 
   //! set the digitize mode; returns the mode key
-  void set_digitize_mode (double rate, int format, int ns);
+  void set_digitize_mode (double rate, int format, int scale, int ns);
 
   //! set the retain mode
   void set_retain_mode (std::string mode);

@@ -48,7 +48,7 @@ decimation = 1
 ##   on a side.  Note that this many pixels corresponds to 2 * samplesPerPulse,
 ##   because the square image contains a circle of radius samplesPerPulse.
 
-imageSize = 2048L
+imageSize = 1024L
 
 ## Azimuth and Range Offsets: if the heading pulse is flaky, azimuth offset must
 ## be used to set the orientation - in radians.  This can be changed
@@ -195,7 +195,7 @@ while (TRUE) {
     scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, imageSize, imageSize, 0, 0, imageSize / 2, imageSize / 2, TRUE)), c(imageSize / (2 * samplesPerPulse), aziRangeOffsets[1] * pi/180, aziRangeOffsets[2]))
   }
 
-  .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(imageSize, 6L)))
+  .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(imageSize, decimation * 64L)))
 
   ## Note: write PNG to newFORCERadarImage.png, then rename to currentFORCERadarImage.png so that
   ##

@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
 
   cmdconfig.add_options()
     ("help,h", "produce help message")
-    ("decim,d", po::value<unsigned int>(&decim), "set fgpa decimation rate (1-65535; default is 1)")
+    ("decim,d", po::value<unsigned int>(&decim), "set fgpa decimation rate (1, 2, 3, 4, 8, 1024, 8192, or 65536; default is 1)")
     ("n_samples,n", po::value<unsigned short>(&n_samples), "number of samples to collect per pulse; default is 512; max is 16384")
     ("quiet,q", "don't output diagnostics")
     ("realtime,T", "try to request realtime priority for process")
@@ -176,8 +176,9 @@ int main(int argc, char *argv[])
 
   // record digitizing mode
   cap->set_digitize_mode( 125e6 / decim, // digitizing rate, Hz
-                         14,   // 12 bits per sample in 16-bit 
-                         n_samples  // samples per pulse
+                         16,   // only uses lowest 14 bits when truncated average
+                          n_samples,  // samples per pulse
+                          ((decim <= 4) ? decim : 1 ) * (1<<14 - 1) // scale: max sample value possible
                          );
 
   cap->set_retain_mode ("full"); // keep all samples from all pulses

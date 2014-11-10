@@ -158,7 +158,7 @@ scan_converter::apply (t_sample *samp,
                        t_pixel *pix,
                        int span,
                        t_palette *pal,
-                       int sample_shift
+                       int sample_scale
                        ) {
 
 /*
@@ -169,12 +169,11 @@ scan_converter::apply (t_sample *samp,
    span		: total pixels per image buffer row; this is used as the change in address
                   from the start of one sub-buffer line to the next.
    pal	        : pointer to palette array
-   sample_shift : number of bits to shift sample value right before looking up in palette
+   sample_scale : value to divide sample by before looking up in palette; takes into account different bit depths and possible summing of multiple samples
 */
 
   int i, j, k;
   int palind;
-  int mask; 
 #ifdef DO_SCAN_CONVERSION_SMOOTHING
   int sample_sum;
   char sample_count;
@@ -185,9 +184,6 @@ scan_converter::apply (t_sample *samp,
 
   // convenience variables
   k = w;
-
-  // a mask for the final colour value (in case t_sample is signed and includes negative values) 
-  mask = (1 << (8 * sizeof(t_sample) - sample_shift)) - 1; 
 
   // apply the sparse linear map
 
@@ -209,7 +205,7 @@ scan_converter::apply (t_sample *samp,
 #ifdef DO_SCAN_CONVERSION_SMOOTHING
         // note: rather than divide by sample_count + 1, we shift right by ((sample_count + 1) / 2)
         // This works because sample_count is 0, 1, or 3 corresponding to 1, 2, or 4 samples being averaged.
-        palind = ((((sample_sum + samp[ (~ inds[i]) >> SCVT_EXTRA_PRECISION_BITS]) >> ((sample_count + 1) >> 1)) >> sample_shift) & mask);
+        palind = (sample_sum + samp[ (~ inds[i]) >> SCVT_EXTRA_PRECISION_BITS]) / (sample_count * sample_scale);
 #else
         palind = ((((samp[inds[i] >> SCVT_EXTRA_PRECISION_BITS])) >> sample_shift) & mask);
 #endif

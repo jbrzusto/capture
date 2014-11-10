@@ -136,7 +136,9 @@ capture_db::ensure_tables() {
                                                                                                        --            A   B   C   0    D   E   F   0
                                                                                                        --            lo         hi    lo         hi
 
-     ns integer                                                                                        -- number of samples per pulse digitized
+     ns integer,                                                                                        -- number of samples per pulse digitized
+     scale integer                                                                                     -- max sample value (e.g. in case samples are sums of decimation
+                                                                                                       -- period samples, rather than truncated averages)
   );
 
   create table if not exists retain_modes (                                                            -- retention modes; specifies what portion of a sweep is retained; 
@@ -186,13 +188,14 @@ capture_db::set_radar_mode (double power, double plen, double prf, double rpm) {
 };
 
 void 
-capture_db::set_digitize_mode (double rate, int format, int ns) {
+capture_db::set_digitize_mode (double rate, int format, int scale, int ns) {
   sqlite3_stmt *st;
-  sqlite3_prepare_v2(db, "insert or replace into digitize_modes (rate, format, ns) values (?, ?, ?)",
+  sqlite3_prepare_v2(db, "insert or replace into digitize_modes (rate, format, ns, scale) values (?, ?, ?, ?)",
                      -1, & st, 0);
   sqlite3_bind_double (st, 1, rate);
   sqlite3_bind_int (st, 2, format);
   sqlite3_bind_int (st, 3, ns);
+  sqlite3_bind_int (st, 4, scale);
   sqlite3_step (st);
   digitize_mode = sqlite3_last_insert_rowid (db);
   digitize_rate = rate;

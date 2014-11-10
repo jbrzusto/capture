@@ -67,6 +67,8 @@ where:
 
       DECIM = 1  => range resolution = 1.2 metres
       DECIM = 2  => range resolution = 2.4 metres
+      DECIM = 3  => range resolution = 3.6 metres
+      DECIM = 4  => range resolution = 4.8 metres
       DECIM = 8  => range resolution = 9.6 metres
 
     These are the only sensible permitted values, currently.
@@ -156,6 +158,12 @@ while [[ "$1" != "" ]]; do
     fi
 done
 
+if (( $DECIM <= 4 )); then
+    USE_SUM=--sum
+else
+    USE_SUM=""
+fi
+
 # Listen on port PORT for raw pulse data from the redpitaya digitizer, and pipe this into
 # the capture process.  "-d" means don't hang up on no stdin, which is required for running
 # netcat in background as a pure listener
@@ -166,7 +174,7 @@ killall netcat
 sleep 1
 
 # start the digdar digitizing process on the redpitaya
-ssh -f root@$DIGDARHOST "(/opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNKSIZE '$REMOVE' | /opt/bin/netcat $LOCALHOST $PORT)&"
+ssh -f root@$DIGDARHOST "(/opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNKSIZE $USE_SUM '$REMOVE' | /opt/bin/netcat $LOCALHOST $PORT)&"
 
 # start generating and pushing live images
 #/home/radar/capture/pushLiveImages.R --samples $NUMSAMP --sampling_rate 125e6 --decim $DECIM > $DATADIR/$LOGFILE 2>&1 &

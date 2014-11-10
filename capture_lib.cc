@@ -42,9 +42,9 @@ void _apply_scan_converter (scan_converter *sc,
                             t_pixel *pix,
                             int span,
                             t_palette *pal,
-                            int sample_shift)
+                            int sample_scale)
 {
-  sc->apply(samp, pix, span, pal, sample_shift);
+  sc->apply(samp, pix, span, pal, sample_scale);
 };
 
 extern "C" {
