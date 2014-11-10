@@ -174,7 +174,7 @@ killall netcat
 sleep 1
 
 # start the digdar digitizing process on the redpitaya
-ssh -f root@$DIGDARHOST "(/opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNKSIZE $USE_SUM '$REMOVE' | /opt/bin/netcat $LOCALHOST $PORT)&"
+echo ssh -f root@$DIGDARHOST "(/opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNKSIZE $USE_SUM '$REMOVE' | /opt/bin/netcat $LOCALHOST $PORT)&"
 
 # start generating and pushing live images
 #/home/radar/capture/pushLiveImages.R --samples $NUMSAMP --sampling_rate 125e6 --decim $DECIM > $DATADIR/$LOGFILE 2>&1 &
