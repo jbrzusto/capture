@@ -162,7 +162,7 @@ while (TRUE) {
   ## get the key for the sweep before the one being filled now
   sk = dbGetQuery(con, sprintf("select distinct sweep_key from pulses order by sweep_key desc limit 2", ts))[2, 1]
   
-  if (sk == last.sk || sk < 1)
+  if (! isTRUE(sk != last.sk && sk > 0))
     next
   
   last.sk = sk
