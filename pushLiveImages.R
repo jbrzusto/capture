@@ -17,7 +17,7 @@
 ## Directory where the capture program stores its sqlite database files
 
 ##dbDir = "/mnt/3tb/force_data"
-dbDir = "/media/FORCE_radar_1/"
+dbDir = "/media/FORCE_radar_2/"
 
 ## Pulses per sweep: a kludgy way to achieve a fixed number of pulses
 ##   per sweep, currently needed by the scan converter.  The
