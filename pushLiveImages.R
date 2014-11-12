@@ -30,10 +30,10 @@ pulsesPerSweep = 3600L
 
 ## Samples per pulse: set by the capture program script; at the full
 ##   digitizing rate of 125 MHz, range per sample is 1.2 metres, so
-##   3000 samples takes us out to 3.6 km.  The capture program
+##   1664 samples takes us out to 3.6 km.  The capture program
 ##   script sets the samplesPerPulse.
 
-samplesPerPulse = 3000L
+samplesPerPulse = 1664L
 
 ## Sampling Rate: base clock rate for samples.
 
@@ -42,13 +42,18 @@ samplingRate = 125e6
 ## Decimation rate: actual sample clock rate is obtained by
 ## dividing samplingRate by decim.
 
-decimation = 1
+decimation = 3
 
 ## Overlay Image dimensions: we generate a square image, this many pixels
 ##   on a side.  Note that this many pixels corresponds to 2 * samplesPerPulse,
 ##   because the square image contains a circle of radius samplesPerPulse.
 
 imageSize = 1024L
+
+## Offset of NE corner of image from radar, in metres [N, E].
+## Increasing these values shifts the coverage to the NE.
+
+cornerOffset = c(1500, 500)
 
 ## Azimuth and Range Offsets: if the heading pulse is flaky, azimuth offset must
 ## be used to set the orientation - in radians.  This can be changed
@@ -110,6 +115,15 @@ while (length(argv) > 0) {
 }
             
 ## -------------------- END OF USER OPTIONS --------------------
+
+##
+VELOCITY_OF_LIGHT = 2.99792458E8
+
+## metres per sample
+mps = VELOCITY_OF_LIGHT / (samplingRate / decimation) / 2.0
+
+## pixels per metre
+ppm = imageSize / (2 * samplesPerPulse * mps)
 
 ## total samples per sweep
 samplesPerSweep = as.integer(pulsesPerSweep * samplesPerPulse)
@@ -192,10 +206,10 @@ while (TRUE) {
     if (! is.null(scanConv))
       .Call("delete_scan_converter", scanConv)
     
-    scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, imageSize, imageSize, 0, 0, imageSize / 2, imageSize / 2, TRUE)), c(imageSize / (2 * samplesPerPulse), aziRangeOffsets[1] * pi/180, aziRangeOffsets[2]))
+    scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, imageSize, imageSize, 0, 0, imageSize - cornerOffset[2] * ppm, cornerOffset[1] * ppm, TRUE)), c(imageSize / (2 * samplesPerPulse), aziRangeOffsets[1] * pi/180, aziRangeOffsets[2]))
   }
 
-  .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(imageSize, decimation * 64L)))
+  .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(imageSize, decimation * 96L)))
 
   ## Note: write PNG to newFORCERadarImage.png, then rename to currentFORCERadarImage.png so that
   ##
