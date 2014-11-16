@@ -53,7 +53,7 @@ imageSize = 1024L
 ## Offset of NE corner of image from radar, in metres [N, E].
 ## Increasing these values shifts the coverage to the NE.
 
-cornerOffset = c(1550, 500)
+cornerOffset = c(2200, 500)
 
 ## Azimuth and Range Offsets: if the heading pulse is flaky, azimuth offset must
 ## be used to set the orientation - in radians.  This can be changed
