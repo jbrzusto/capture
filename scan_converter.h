@@ -71,6 +71,9 @@ class scan_converter {
 
   double first_range;  // range of the start of the first column of source data
 
+  double azi_begin;// start azimuth [0..1] for use of pulses
+  double azi_end;  // end azimuth [0..1] for use of pulses
+
   int first_row_offset;    // index of the first row to be used in the source data
                            // FIXME: we wrap this offset around on the assumption the source data
                            // form a complete circle
@@ -86,7 +89,9 @@ class scan_converter {
                    bool always_smooth_angular,
 		   double scale,
 		   double first_angle,
-		   double first_range
+		   double first_range,
+                   double azi_begin,
+                   double azi_end
                    );
 
   ~scan_converter();

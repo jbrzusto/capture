@@ -206,7 +206,7 @@ while (TRUE) {
     if (! is.null(scanConv))
       .Call("delete_scan_converter", scanConv)
     
-    scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, imageSize, imageSize, 0, 0, imageSize - cornerOffset[2] * ppm, cornerOffset[1] * ppm, TRUE)), c(imageSize / (2 * samplesPerPulse), aziRangeOffsets[1] * pi/180, aziRangeOffsets[2]))
+    scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, imageSize, imageSize, 0, 0, imageSize - cornerOffset[2] * ppm, cornerOffset[1] * ppm, TRUE)), c(imageSize / (2 * samplesPerPulse), aziRangeOffsets[1] * pi/180, aziRangeOffsets[2], aziRangeOffsets[3], aziRangeOffsets[4]))
   }
 
   .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(imageSize, decimation * 96L)))

@@ -12,7 +12,9 @@ scan_converter::scan_converter ( int nr,
                                  bool always_smooth_angular,
                                  double scale,
                                  double first_angle,
-                                 double first_range
+                                 double first_range,
+                                 double azi_begin,
+                                 double azi_end
                                  ) :
   nr(nr),
   nc(nc),
@@ -25,6 +27,8 @@ scan_converter::scan_converter ( int nr,
   scale(scale),
   first_angle(first_angle),
   first_range(first_range),
+  azi_begin(azi_begin),
+  azi_end(azi_end),
   always_smooth_angular(always_smooth_angular),
   inds(0)
 {
@@ -53,6 +57,9 @@ scan_converter::scan_converter ( int nr,
   char sample_count;
 
   int snc = nc * SCVT_EXTRA_PRECISION_FACTOR; // scaled version of nc with extra pr
+
+  int azi_begin_i = azi_begin * nr, azi_end_i = azi_end * nr;
+  char normal_limits = azi_begin <= azi_end;
 
   // -------------------- INDEX FROM SCRATCH --------------------
 
@@ -99,7 +106,11 @@ scan_converter::scan_converter ( int nr,
       x = i - xc + 0.5;
       theta = ((int) (0.5 + theta_factor * (atan2(x, y) + theta0))) % (unsigned) nr;
       range = (int) (0.5 + (sqrt(x * x + y * y) - first_range) / scale);
-      if (range >= 0 && range < snc) {
+      if (range >= 0 && range < snc 
+          && (
+              (normal_limits && theta >= azi_begin_i && theta <= azi_end_i) ||
+              ((! normal_limits) && theta <= azi_begin_i && theta >= azi_end_i) )
+              ) {
         // the pixel has at least one corresponding data sample
         l = theta * snc + range;
         sample_sum = sample_count = 0;
