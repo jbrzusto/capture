@@ -44,9 +44,10 @@ void _apply_scan_converter (scan_converter *sc,
                             t_pixel *pix,
                             int span,
                             t_palette *pal,
+                            int sample_origin,
                             int sample_scale)
 {
-  sc->apply(samp, pix, span, pal, sample_scale);
+  sc->apply(samp, pix, span, pal, sample_origin, sample_scale);
 };
 
 extern "C" {
@@ -90,7 +91,7 @@ delete_scan_converter (SEXP sc_handle) {
 SEXP
 apply_scan_converter (SEXP sc_handle, SEXP samples, SEXP pixels, SEXP palette, SEXP int_args) {
   scan_converter * scp = (scan_converter *) EXTPTR_PTR(sc_handle);
-  _apply_scan_converter(scp, (unsigned short *) RAW(samples), (unsigned int *) INTEGER(pixels), INTEGER(int_args)[0], (unsigned int *) INTEGER(palette), INTEGER(int_args)[1]);
+  _apply_scan_converter(scp, (unsigned short *) RAW(samples), (unsigned int *) INTEGER(pixels), INTEGER(int_args)[0], (unsigned int *) INTEGER(palette), INTEGER(int_args)[1], INTEGER(int_args)[2]);
   return R_NilValue;
 };
 

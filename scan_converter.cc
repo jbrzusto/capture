@@ -169,6 +169,7 @@ scan_converter::apply (t_sample *samp,
                        t_pixel *pix,
                        int span,
                        t_palette *pal,
+                       int sample_origin,
                        int sample_scale
                        ) {
 
@@ -205,7 +206,7 @@ scan_converter::apply (t_sample *samp,
   for (i = 0, j = 0; i < num_inds; ++i) {
 #ifdef DO_SCAN_CONVERSION_SMOOTHING
     if (inds[i] >= 0) {
-      sample_sum += samp[inds[i] >> SCVT_EXTRA_PRECISION_BITS];
+      sample_sum += samp[inds[i] >> SCVT_EXTRA_PRECISION_BITS] - sample_origin;
       ++sample_count;
     } else { 
 #endif
@@ -216,7 +217,7 @@ scan_converter::apply (t_sample *samp,
 #ifdef DO_SCAN_CONVERSION_SMOOTHING
         // note: rather than divide by sample_count + 1, we shift right by ((sample_count + 1) / 2)
         // This works because sample_count is 0, 1, or 3 corresponding to 1, 2, or 4 samples being averaged.
-        palind = (sample_sum + samp[ (~ inds[i]) >> SCVT_EXTRA_PRECISION_BITS]) / ((sample_count + 1) * sample_scale);
+        palind = (sample_sum + samp[ (~ inds[i]) >> SCVT_EXTRA_PRECISION_BITS] - sample_origin) / ((sample_count + 1) * sample_scale);
 #else
         palind = ((((samp[inds[i] >> SCVT_EXTRA_PRECISION_BITS])) >> sample_shift) & mask);
 #endif

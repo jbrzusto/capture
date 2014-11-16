@@ -6,7 +6,7 @@
  * @author John Brzustowski <jbrzusto is at fastmail dot fm>
  * @version 0.1
  * @date 2013
- * @license GPL v3 or later
+ * @license GPL v2 or later
  *
  */
 
@@ -100,6 +100,7 @@ class scan_converter {
               t_pixel *pix,
               int span,
               t_palette *pal,
+              int sample_origin,
               int sample_scale
               );
   

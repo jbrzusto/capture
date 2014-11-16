@@ -53,7 +53,7 @@ imageSize = 1024L
 ## Offset of NE corner of image from radar, in metres [N, E].
 ## Increasing these values shifts the coverage to the NE.
 
-cornerOffset = c(1500, 500)
+cornerOffset = c(1550, 500)
 
 ## Azimuth and Range Offsets: if the heading pulse is flaky, azimuth offset must
 ## be used to set the orientation - in radians.  This can be changed
@@ -209,7 +209,7 @@ while (TRUE) {
     scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, imageSize, imageSize, 0, 0, imageSize - cornerOffset[2] * ppm, cornerOffset[1] * ppm, TRUE)), c(imageSize / (2 * samplesPerPulse), aziRangeOffsets[1] * pi/180, aziRangeOffsets[2], aziRangeOffsets[3], aziRangeOffsets[4]))
   }
 
-  .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(imageSize, decimation * 96L)))
+  .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(imageSize, 7000L, decimation * 96L)))
 
   ## Note: write PNG to newFORCERadarImage.png, then rename to currentFORCERadarImage.png so that
   ##
