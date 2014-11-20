@@ -209,7 +209,7 @@ while (TRUE) {
     scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, imageSize, imageSize, 0, 0, imageSize - cornerOffset[2] * ppm, cornerOffset[1] * ppm, TRUE)), c(imageSize / (2 * samplesPerPulse), aziRangeOffsets[1] * pi/180, aziRangeOffsets[2], aziRangeOffsets[3], aziRangeOffsets[4]))
   }
 
-  .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(imageSize, 7000L, decimation * 96L)))
+  .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(imageSize, 20000L, decimation * 64L)))
 
   ## Note: write PNG to newFORCERadarImage.png, then rename to currentFORCERadarImage.png so that
   ##
