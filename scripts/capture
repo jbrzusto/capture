@@ -171,10 +171,16 @@ fi
 killall netcat
 ( netcat -d -l $PORT | /home/radar/capture/rpcapture -d $DECIM -n $NUMSAMP -T $DATADIR/$OUTFILE) &
 
-sleep 1
+# set the red pitaya's RTC.  FIXME: we should be running ntpd or chrony
+# on there instead!  Precision here is 1s.
+
+ssh root@rp date `date "+%m%d%H%M%Y.%S"`
+
+# start the digdar digitizing process on the redpitaya
+ssh -f -n root@$DIGDARHOST "/opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNKSIZE $USE_SUM $REMOVE -t $LOCALHOST:$PORT)&"
+
+sleep 3
 
 # start generating and pushing live images
 /home/radar/capture/pushLiveImages.R --samples $NUMSAMP --sampling_rate 125e6 --decim $DECIM > $DATADIR/$LOGFILE 2>&1 &
 
-# start the digdar digitizing process on the redpitaya
-ssh -f -n root@$DIGDARHOST "(/opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNKSIZE $USE_SUM $REMOVE | /opt/bin/netcat $LOCALHOST $PORT)&"

@@ -221,11 +221,14 @@ do_capture  (capture_db * cap, int n_samples)
       break;
     }
 
-    double ts = now();
+    // realtime ts at start of pulse is ARP ts + 8 ns per ADC tick,
+    // which is what meta->trig_clock provides
+
+    double ts = meta->arp_clock_sec + 1.0e-9*(meta->arp_clock_nsec + 8 * meta->trig_clock);
 
     // calculate azimuth based on count of ACPs since most recent ARP.
 
-    cap->record_pulse (ts, // timestamp at PC; okay for now, use better value combining RTC, digitizer clocks
+    cap->record_pulse (ts,
                        meta->num_trig,
                        meta->trig_clock,
                        meta->acp_clock,
