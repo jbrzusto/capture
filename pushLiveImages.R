@@ -124,15 +124,6 @@ desiredAzi = seq(from=0.122, to=0.425, by=1.0 / 3600)
 
 pulsesPerSweep = length(desiredAzi)
 
-## Pulses per sweep: a kludgy way to achieve a fixed number of pulses
-##   per sweep, currently needed by the scan converter.  The
-##   Bridgemaster E operating in short pulse mode generates pulses @
-##   1800 Hz and rotates at 28 RPM for a total of ~ 3857 pulses per
-##   sweep. We select down to 3600 pulses, which gives 0.1 degree
-##   azimuth resolution.
-
-pulsesPerSweep = length(desiredAzi)
-    
 ## Get all database filenames 
 
 dbFiles = dir(dbDir, pattern="^force.*\\.sqlite$", full.names=TRUE)
