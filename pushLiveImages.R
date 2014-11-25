@@ -19,15 +19,6 @@
 ##dbDir = "/mnt/3tb/force_data"
 dbDir = "/media/FORCE_radar_1/"
 
-## Pulses per sweep: a kludgy way to achieve a fixed number of pulses
-##   per sweep, currently needed by the scan converter.  The
-##   Bridgemaster E operating in short pulse mode generates pulses @
-##   1800 Hz and rotates at 28 RPM for a total of ~ 3857 pulses per
-##   sweep. We select down to 3600 pulses, which gives 0.1 degree
-##   azimuth resolution.
-
-pulsesPerSweep = 3600L
-
 ## Samples per pulse: set by the capture program script; at the full
 ##   digitizing rate of 125 MHz, range per sample is 1.2 metres, so
 ##   1664 samples takes us out to 3.6 km.  The capture program
@@ -48,19 +39,17 @@ decimation = 3
 ##   on a side.  Note that this many pixels corresponds to 2 * samplesPerPulse,
 ##   because the square image contains a circle of radius samplesPerPulse.
 
-imageSize = 1024L
+imageSize = 2048L
 
-## Offset of NE corner of image from radar, in metres [N, E].
-## Increasing these values shifts the coverage to the NE.
-
-cornerOffset = c(2200, 500)
 
 ## Azimuth and Range Offsets: if the heading pulse is flaky, azimuth offset must
 ## be used to set the orientation - in radians.  This can be changed
 ## dynamically by putting a numeric value (in degrees) in the file
 ## azimuthOffset.txt in the working directory, as is done for palette.
+## 3rd, 4th elts are Offset of NE corner of image from radar, in metres [N, E].
+## Increasing these values shifts the coverage to the NE.
 
-aziRangeOffsets = c(164 * (pi / 180), 40)
+aziRangeOffsets = c(47,0,2200,500)
 
 ## Azimuth offset file: allows live correction of azimuth angle.  This
 ## is a temporary kludge!
@@ -125,11 +114,17 @@ mps = VELOCITY_OF_LIGHT / (samplingRate / decimation) / 2.0
 ## pixels per metre
 ppm = imageSize / (2 * samplesPerPulse * mps)
 
-## total samples per sweep
-samplesPerSweep = as.integer(pulsesPerSweep * samplesPerPulse)
-
 ## desired azimuths
-desiredAzi = (0:3599)/3600
+desiredAzi = seq(from=0.122, to=0.425, by=1.0 / 3600)
+
+## Pulses per sweep: a kludgy way to achieve a fixed number of pulses
+##   per sweep, currently needed by the scan converter.  The
+##   Bridgemaster E operating in short pulse mode generates pulses @
+##   1800 Hz and rotates at 28 RPM for a total of ~ 3857 pulses per
+##   sweep. We select down to 3600 pulses, which gives 0.1 degree
+##   azimuth resolution.
+
+pulsesPerSweep = length(desiredAzi)
 
 ## Get all database filenames 
 
@@ -162,6 +157,7 @@ attr(pix, "channels") = 4
 
 scanConv = NULL
 last.sk = -1
+
 while (TRUE) {
   gc(verbose=FALSE)
   Sys.sleep(0.1)
@@ -190,8 +186,8 @@ while (TRUE) {
   ## get pulses uniformly spread around circle
 
   keep = approx(x$azi,1:nrow(x),desiredAzi, method="constant", rule=2)$y
-  x=x[keep,]
   
+  x=x[keep,]
   b = unlist(x$samples) ## concatenate the raw bytes for all pulses into a single raw vector
   
   lastAziRangeOffsets = aziRangeOffsets
@@ -206,8 +202,8 @@ while (TRUE) {
     if (! is.null(scanConv))
       .Call("delete_scan_converter", scanConv)
     
-    scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, imageSize, imageSize, 0, 0, imageSize - cornerOffset[2] * ppm, cornerOffset[1] * ppm, TRUE)), c(imageSize / (2 * samplesPerPulse), aziRangeOffsets[1] * pi/180, aziRangeOffsets[2], aziRangeOffsets[3], aziRangeOffsets[4]))
-  }
+    scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, imageSize, imageSize, 0, 0, imageSize - aziRangeOffsets[4] * ppm, aziRangeOffsets[3] * ppm, TRUE)), c(imageSize / (2 * samplesPerPulse), aziRangeOffsets[2] , aziRangeOffsets[1]/360+desiredAzi[1], aziRangeOffsets[1]/360+tail(desiredAzi,1)))
+}
 
   .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(imageSize, 20000L, decimation * 64L)))
 
