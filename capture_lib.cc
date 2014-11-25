@@ -26,13 +26,12 @@ scan_converter * _make_scan_converter (int nr,
                                        int yc,
                                        bool always_smooth_angular,
                                        double scale,
-                                       double first_angle,
                                        double first_range,
                                        double azi_begin,
                                        double azi_end
                                        )
 {
-  return new scan_converter(nr, nc, w, h, x0, y0, xc, yc, always_smooth_angular, scale, first_angle, first_range, azi_begin, azi_end);
+  return new scan_converter(nr, nc, w, h, x0, y0, xc, yc, always_smooth_angular, scale, first_range, azi_begin, azi_end);
 };
 
 void _delete_scan_converter (scan_converter *sc) {
@@ -77,8 +76,7 @@ make_scan_converter (SEXP int_args, SEXP double_args) {
                         REAL(double_args)[0],
                         REAL(double_args)[1],
                         REAL(double_args)[2],
-                        REAL(double_args)[3],
-                        REAL(double_args)[4]
+                        REAL(double_args)[3]
                                               );
   return R_MakeExternalPtr(sc, 0, 0);
 };

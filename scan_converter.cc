@@ -11,7 +11,6 @@ scan_converter::scan_converter ( int nr,
                                  int yc,
                                  bool always_smooth_angular,
                                  double scale,
-                                 double first_angle,
                                  double first_range,
                                  double azi_begin,
                                  double azi_end
@@ -24,12 +23,12 @@ scan_converter::scan_converter ( int nr,
   y0(y0),
   xc(xc),
   yc(yc),
+  always_smooth_angular(always_smooth_angular),
   scale(scale),
-  first_angle(first_angle),
   first_range(first_range),
   azi_begin(azi_begin),
   azi_end(azi_end),
-  always_smooth_angular(always_smooth_angular),
+  azi_step((azi_end - azi_begin) / (nr - 1.0)),
   inds(0)
 {
   // create a scan converter for mapping polar to cartesian data
@@ -41,10 +40,11 @@ scan_converter::scan_converter ( int nr,
   //         be within the output sub block)
   // always_smooth_angular: if true, always do smoothing across pulses
   // scale:  pixels per sample 
-  // first_angle:  angle (in radians clockwise from the output horizontal axis) of the first row of source data
   // first_range:  range of first sample, measured in range-cell size.  This need not be an integer.
   //               Negative means there are bogus (pre-trigger)
   //               samples at the start of each pulse; positive means there are missing samples.
+  // azi_begin: azimuth of first pulse [0..1]
+  // azi_end: azimuth of last pulse [0..1]
 
   char use_radial_neighbours;	/* true if radially neighbouring input slots are used for each output slot */
   int angular_neighbour_thresh; /* the minimum (in pixels) at which angular neighbours are used for each pixel */
@@ -58,12 +58,9 @@ scan_converter::scan_converter ( int nr,
 
   int snc = nc * SCVT_EXTRA_PRECISION_FACTOR; // scaled version of nc with extra pr
 
-  int azi_begin_i = azi_begin * nr, azi_end_i = azi_end * nr;
   char normal_limits = azi_begin <= azi_end;
 
   // -------------------- INDEX FROM SCRATCH --------------------
-
-  first_row_offset = - ((int)(first_angle / 2 / M_PI * nr) % nr);
 
   /* we'll need a list big enough to hold up to 4 input slot indexes per output slot */
       
@@ -97,20 +94,20 @@ scan_converter::scan_converter ( int nr,
   l = 0; /* avoid a compiler warning */
   jhi = x0 + h;
   ihi = y0 + w; 
-  theta0 = 2 * M_PI - first_angle;
-  theta_factor = nr / (2 * M_PI);
+  theta0 = 2 * M_PI * (1.0 - azi_begin); // mathematical angle at first pulse
+  theta_factor = (2 * M_PI * azi_step); // convert angle to pulse index
 
   for (j = x0; j < jhi; ++j ) {
-    y = - (j - yc + 0.5);
+    y = (j - yc + 0.5);
     for (i = y0; i < ihi; ++i) {
       x = i - xc + 0.5;
-      theta = ((int) (0.5 + theta_factor * (atan2(x, y) + theta0))) % (unsigned) nr;
+      double aa = atan2(y, x);
+      double bb = fmod( 2 * M_PI + aa, 2 * M_PI) / (2 * M_PI) - azi_begin;
+      theta = (int) (0.5 +  bb / azi_step);
       range = (int) (0.5 + (sqrt(x * x + y * y) - first_range) / scale);
       if (range >= 0 && range < snc 
           && (
-              (normal_limits && theta >= azi_begin_i && theta <= azi_end_i) ||
-              ((! normal_limits) && theta <= azi_begin_i && theta >= azi_end_i) )
-              ) {
+              (normal_limits && theta >= 0 && theta < nr))) {
         // the pixel has at least one corresponding data sample
         l = theta * snc + range;
         sample_sum = sample_count = 0;

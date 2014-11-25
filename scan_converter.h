@@ -54,8 +54,7 @@ class scan_converter {
  public:
   int nr, nc;  // dimensions of source data buffer in angle count, radius count
                // data must be stored in increasing radius within increasing angle
-               // FIXME:  for now we assume the angles are evenly spaced around 
-               // a complete circle.
+               // FIXME:  for now we assume the angles are evenly spaced
 
   int w, h;  // dimensions of image sub-buffer in pixels (width, height)
 
@@ -67,12 +66,12 @@ class scan_converter {
 
   double scale; // number of output slots per input slot along the cartesian axes
 
-  double first_angle;  // (mathematical) angle of the first row of source data
+  double first_range; // range of first sample
 
-  double first_range;  // range of the start of the first column of source data
+  double azi_begin;// azimuth [0..1] of first pulse
+  double azi_end;  // azimuth [0..1] of last pulse
 
-  double azi_begin;// start azimuth [0..1] for use of pulses
-  double azi_end;  // end azimuth [0..1] for use of pulses
+  double azi_step; // azimuth step [0..1] of input pulses (will be constant)
 
   int first_row_offset;    // index of the first row to be used in the source data
                            // FIXME: we wrap this offset around on the assumption the source data
@@ -88,7 +87,6 @@ class scan_converter {
 		   int yc,
                    bool always_smooth_angular,
 		   double scale,
-		   double first_angle,
 		   double first_range,
                    double azi_begin,
                    double azi_end
