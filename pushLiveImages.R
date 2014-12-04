@@ -24,7 +24,8 @@ dbDir = "/media/FORCE_radar_1/"
 ##   1664 samples takes us out to 3.6 km.  The capture program
 ##   script sets the samplesPerPulse.
 
-samplesPerPulse = 1664L
+#samplesPerPulse = 1664L
+samplesPerPulse = 2000L
 
 ## Sampling Rate: base clock rate for samples.
 
@@ -33,12 +34,13 @@ samplingRate = 125e6
 ## Decimation rate: actual sample clock rate is obtained by
 ## dividing samplingRate by decim.
 
-decimation = 3
+#decimation = 3
+decimation = 4
 
 ## Overlay Image dimensions: we generate a square image, this many pixels
 ##   on a side.
 
-imageSize = 2048L
+imageSize = 1536L
 
 ## Azimuth and Range Offsets: if the heading pulse is flaky, azimuth offset must
 ## be used to set the orientation - in radians.  This can be changed
@@ -47,7 +49,7 @@ imageSize = 2048L
 ## 3rd, 4th elts are Offset of NE corner of image from radar, in metres [N, E].
 ## Increasing these values shifts the coverage to the NE.
 
-aziRangeOffsets = c(47,0,2200,500)
+aziRangeOffsets = c(46.8,0,2200,500)
 
 ## Azimuth offset file: allows live correction of azimuth angle.  This
 ## is a temporary kludge!
@@ -58,6 +60,9 @@ scpDestUser = "force-radar@discovery"
 
 ## SCP Destination - folder on remote host to which images are pushed
 scpDestDir = "/home/www/html/htdocs/force/"
+
+## archiveScript - script on remote host for archiving uploaded image
+archiveScript = "/home/john/proj/force_radar_website/archive_image.py"
 
 argv = commandArgs(TRUE)
 
@@ -203,7 +208,7 @@ while (TRUE) {
     scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, imageSize, imageSize, 0, 0, imageSize - aziRangeOffsets[4] * ppm, aziRangeOffsets[3] * ppm, TRUE)), c(imageSize / (2 * samplesPerPulse), aziRangeOffsets[2] , aziRangeOffsets[1]/360+desiredAzi[1], aziRangeOffsets[1]/360+tail(desiredAzi,1)))
 }
 
-  .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(imageSize, 20000L, decimation * 64L)))
+  .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(imageSize, 7000*decimation, decimation * 64L)))
 
   ## Note: write PNG to newFORCERadarImage.png, then rename to currentFORCERadarImage.png so that
   ##
@@ -215,5 +220,5 @@ while (TRUE) {
   ## process is serving the file, it serves either the complete previous image, or the complete new
   ## image, rather than a partial or corrupt image.
   
-  system(sprintf("ssh %s mv -f %s/currentFORCERadarImage.png %s/FORCERadarImage.png", scpDestUser, scpDestDir, scpDestDir))
+  system(sprintf("ssh %s %s", scpDestUser, archiveScript))
 } 
