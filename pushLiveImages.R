@@ -161,9 +161,11 @@ attr(pix, "channels") = 4
 scanConv = NULL
 last.sk = -1
 
+pal = readRDS("/home/radar/capture/radarImagePalette.rds")  ## low-overhead read of palette, to allow changing dynamically
+
 while (TRUE) {
   gc(verbose=FALSE)
-  Sys.sleep(0.1)
+##  Sys.sleep(0.1)
   ## see how far the pulse capturing has gone.
   ## For now, we look for the latest complete sweep.  For later, we'll generate images chunk by chunk (e.g. quadrant
   ## by quadrant) for finer-grained screen update.  The trick is not to query too close to the leading
@@ -179,8 +181,6 @@ while (TRUE) {
     next
   
   last.sk = sk
-
-  pal = readRDS("/home/radar/capture/radarImagePalette.rds")  ## low-overhead read of palette, to allow changing dynamically
 
   ## get all pulses for this sweep
   x = dbGetQuery(con, sprintf("select * from pulses where sweep_key = %d order by ts", sk))
@@ -208,17 +208,16 @@ while (TRUE) {
     scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, imageSize, imageSize, 0, 0, imageSize - aziRangeOffsets[4] * ppm, aziRangeOffsets[3] * ppm, TRUE)), c(imageSize / (2 * samplesPerPulse), aziRangeOffsets[2] , aziRangeOffsets[1]/360+desiredAzi[1], aziRangeOffsets[1]/360+tail(desiredAzi,1)))
 }
 
-  .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(imageSize, 7000*decimation, decimation * 64L)))
+  .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(imageSize, 6500*decimation, 0.5 + decimation * (16383-6500) / 255)))
 
   ## Note: write PNG to newFORCERadarImage.png, then rename to currentFORCERadarImage.png so that
   ##
   pngFile = file(file.path(dbDir, "currentFORCERadarImage.png"), "wb")
   writePNG(pix, pngFile)
   close(pngFile)
-  system(sprintf("scp -q %s/currentFORCERadarImage.png %s/FORCERadarSweepMetadata.txt %s:%s", dbDir, dbDir, scpDestUser, scpDestDir))
-  ## rename 'current' to plain version; this is done atomically, so that if the web server
-  ## process is serving the file, it serves either the complete previous image, or the complete new
-  ## image, rather than a partial or corrupt image.
-  
-  system(sprintf("ssh %s %s", scpDestUser, archiveScript))
+  ## Copy file to server, then rename 'current' to plain version; this
+  ## is done atomically, so that if the web server process is serving
+  ## the file, it serves either the complete previous image, or the
+  ## complete new image, rather than a partial or corrupt image.
+  system(sprintf("scp -q %s/currentFORCERadarImage.png %s/FORCERadarSweepMetadata.txt %s:%s; ssh %s %s", dbDir, dbDir, scpDestUser, scpDestDir, scpDestUser, archiveScript))
 } 
