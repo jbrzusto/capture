@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /*
- * @file capture.cc
+ * @file rpcapture.cc
  *  
  * @brief Capture raw radar pulses from stdin into a database.
  * Format of raw pulses is given in pulse_metadata.h
@@ -187,8 +187,8 @@ int main(int argc, char *argv[])
 
   double ts = now();
   cap->record_geo(ts, 
-              45.371907, -64.402584, 30, // lat, lon, alt of Fundy Force radar site
-              0); // heading offset, in degrees
+              45.371357, -64.402784, 30, // lat, lon, alt of FORCE VC radar site
+              136.8); // heading offset, in degrees clockwise from north, for radar at FORCE VC
 
   do_capture (cap, n_samples);
 
