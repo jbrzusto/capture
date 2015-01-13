@@ -64,6 +64,9 @@ scpDestDir = "/home/www/html/htdocs/force/"
 ## archiveScript - script on remote host for archiving uploaded image
 archiveScript = "/home/john/proj/force_radar_website/archive_image.py"
 
+## removal zone - range of azimuths to drop from image
+removal = NULL
+
 argv = commandArgs(TRUE)
 
 while (length(argv) > 0) {
@@ -100,6 +103,10 @@ while (length(argv) > 0) {
                 decimation = as.numeric(argv[2])
                 argv = argv[-(1:2)]
             },
+            "--remove" = {
+                removal = as.numeric(strsplit(argv[2], ":")[[1]])
+                argv = argv[-(1:2)]
+            },
             {
                 stop("Unknown option", argv[1])
             }
@@ -118,7 +125,13 @@ mps = VELOCITY_OF_LIGHT / (samplingRate / decimation) / 2.0
 ppm = imageSize / (2 * samplesPerPulse * mps)
 
 ## desired azimuths
-desiredAzi = seq(from=0.122, to=0.425, by=1.0 / 3600)
+if (is.null(removal)) {
+    desiredAzi = seq(from=0, to=1, by = 1.0 / 3600)
+} else if (diff(removal) > 0) {
+    desiredAzi = c(seq(from=0, to = removal[1], by = 1.0/3600), seq(from = removal[2], to = 1, by = 1.0/3600))
+} else {
+    desiredAzi = seq(from=removal[2], to=removal[1], by=1.0 / 3600)
+}    
 
 ## Pulses per sweep: a kludgy way to achieve a fixed number of pulses
 ##   per sweep, currently needed by the scan converter.  The
@@ -131,7 +144,7 @@ pulsesPerSweep = length(desiredAzi)
 
 ## Get all database filenames 
 
-dbFiles = dir(dbDir, pattern="^force.*\\.sqlite$", full.names=TRUE)
+dbFiles = dir(dbDir, pattern="^FORCEVC_raw.*\\.sqlite$", full.names=TRUE)
 
 ## choose the most recent one
 dbFile = dbFiles[order(file.info(dbFiles)$mtime, decreasing=TRUE)[1]]
@@ -208,7 +221,7 @@ while (TRUE) {
     scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, imageSize, imageSize, 0, 0, imageSize - aziRangeOffsets[4] * ppm, aziRangeOffsets[3] * ppm, TRUE)), c(imageSize / (2 * samplesPerPulse), aziRangeOffsets[2] , aziRangeOffsets[1]/360+desiredAzi[1], aziRangeOffsets[1]/360+tail(desiredAzi,1)))
 }
 
-  .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(imageSize, 6500*decimation, 0.5 + decimation * (16383-6500) / 255)))
+  .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(imageSize, 6200*decimation, 0.5 + decimation * (16383-6200) / 255)))
 
   ## Note: write PNG to newFORCERadarImage.png, then rename to currentFORCERadarImage.png so that
   ##

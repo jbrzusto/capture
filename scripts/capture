@@ -31,7 +31,7 @@ fi
 
 # filename template
 DATE=`date +"%Y-%m-%dT%H-%M-%S.%3N"`
-OUTFILE="force_$DATE.sqlite"
+OUTFILE="FORCEVC_raw_$DATE.sqlite"
 LOGFILE="pushlog_$DATE.txt"
 
 # default samples per pulse
@@ -150,7 +150,10 @@ fi
 
 while [[ "$1" != "" ]]; do
     if [[ "$1" == "-r" ]]; then
-        REMOVE="$REMOVE $1 $2"
+        if [[ "$REMOVE" == "" ]]; then
+            REMOVE="--remove";
+        fi;
+        REMOVE="$REMOVE $2"
         shift 2;
     else
         echo "Error: invalid argument: $1.\n  Do capture -h for help."
@@ -182,4 +185,4 @@ ssh -f -n root@$DIGDARHOST "/opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c 
 sleep 3
 
 # start generating and pushing live images
-/home/radar/capture/pushLiveImages.R --samples $NUMSAMP --sampling_rate 125e6 --decim $DECIM > $DATADIR/$LOGFILE 2>&1 &
+/home/radar/capture/pushLiveImages.R --samples $NUMSAMP --sampling_rate 125e6 --decim $DECIM $REMOVE > $DATADIR/$LOGFILE 2>&1 &
