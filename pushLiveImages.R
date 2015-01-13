@@ -121,8 +121,16 @@ VELOCITY_OF_LIGHT = 2.99792458E8
 ## metres per sample
 mps = VELOCITY_OF_LIGHT / (samplingRate / decimation) / 2.0
 
-## pixels per metre
-ppm = imageSize / (2 * samplesPerPulse * mps)
+## desired pixels per metre
+ppm = 1.0 / 7.5
+
+## Desired image extents
+##  xlim is east/west (negative = west)
+xlim = c(-8594, 0)
+iwidth = round(diff(xlim) * ppm)
+##  xlim is north/south (negative = south)
+ylim = c(-5775, 2182)
+iheight = round(diff(ylim) * ppm)
 
 ## desired azimuths
 if (is.null(removal)) {
@@ -167,7 +175,7 @@ while (is.null(con)) {
         )
 }
 
-pix = matrix(0L, imageSize, imageSize)
+pix = matrix(0L, iheight, iwidth)
 class(pix)="nativeRaster"
 attr(pix, "channels") = 4
 
@@ -211,17 +219,17 @@ while (TRUE) {
     aziRangeOffsets = scan(aziRangeOffsetsFile, sep=",", quiet=TRUE)
 
   ## output timestamp of last pulse, and azi/range offsets
-  cat(sprintf("{\n  \"ts\": %.3f,\n  \"samplesPerPulse\": %d,\n  \"pulsesPerSweep\": %d,\n  \"imageSize\": %d,\n  \"aziOffset\": %f,\n  \"rangeOffset\": %f,\n  \"samplingRate\": %f\n}", tail(x$ts, 1), samplesPerPulse, pulsesPerSweep, imageSize, aziRangeOffsets[1], aziRangeOffsets[2], samplingRate / decimation ), file=file.path(dbDir, "FORCERadarSweepMetadata.txt"))
+  cat(sprintf("{\n  \"ts\": %.3f,\n  \"samplesPerPulse\": %d,\n  \"pulsesPerSweep\": %d,\n  \"width\": %d,\n   \"height\": %d,\n  \"xlim\": [%f, %f],\n   \"ylim\": [%f, %f],\n  \"ppm\": %f,\n \"aziOffset\": %f,\n  \"rangeOffset\": %f,\n  \"samplingRate\": %f\n}", tail(x$ts, 1), samplesPerPulse, pulsesPerSweep, iwidth, iheight, xlim[1], xlim[2], ylim[1], ylim[2], ppm, aziRangeOffsets[1], aziRangeOffsets[2], samplingRate / decimation ), file=file.path(dbDir, "FORCERadarSweepMetadata.txt"))
 
   ## if necessary, regenerate scan converter
   if (is.null(scanConv) || ! identical(aziRangeOffsets, lastAziRangeOffsets)) {
     if (! is.null(scanConv))
       .Call("delete_scan_converter", scanConv)
     
-    scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, imageSize, imageSize, 0, 0, imageSize - aziRangeOffsets[4] * ppm, aziRangeOffsets[3] * ppm, TRUE)), c(imageSize / (2 * samplesPerPulse), aziRangeOffsets[2] , aziRangeOffsets[1]/360+desiredAzi[1], aziRangeOffsets[1]/360+tail(desiredAzi,1)))
+    scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, iwidth, iheight, 0, 0, iwidth, ylim[2] * ppm, TRUE)), c(ppm * mps, aziRangeOffsets[2] , aziRangeOffsets[1]/360+desiredAzi[1], aziRangeOffsets[1]/360+tail(desiredAzi,1)))
 }
 
-  .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(imageSize, 6200*decimation, 0.5 + decimation * (16383-6200) / 255)))
+  .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(iwidth, 6100*decimation, 0.5 + decimation * (16383-6100) / 255)))
 
   ## Note: write PNG to newFORCERadarImage.png, then rename to currentFORCERadarImage.png so that
   ##
