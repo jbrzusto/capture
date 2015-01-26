@@ -177,10 +177,10 @@ killall netcat
 # set the red pitaya's RTC.  FIXME: we should be running ntpd or chrony
 # on there instead!  Precision here is 1s.
 
-ssh -o ControlMaster=none root@$DIGDARHOST date `date "+%m%d%H%M%Y.%S"`
+ssh -o ControlMaster=no root@$DIGDARHOST date `date "+%m%d%H%M%Y.%S"`
 
 # start the digdar digitizing process on the redpitaya
-ssh -o ControlMaster=none -f -n root@$DIGDARHOST "/opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNKSIZE $USE_SUM $REMOVE -t $LOCALHOST:$PORT &"
+ssh -o ControlMaster=no -f -n root@$DIGDARHOST "/opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNKSIZE $USE_SUM $REMOVE -t $LOCALHOST:$PORT &"
 
 sleep 3
 
