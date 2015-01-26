@@ -41,7 +41,7 @@ decimation = 4
 ## Overlay Image dimensions: we generate a square image, this many pixels
 ##   on a side.
 
-imageSize = 1536L
+imageSize = 1024L
 
 ## Azimuth and Range Offsets: if the heading pulse is flaky, azimuth offset must
 ## be used to set the orientation - in radians.  This can be changed
@@ -63,8 +63,7 @@ scpDestUser = "force-radar@discovery"
 scpDestDir = "/home/www/html/htdocs/force/"
 
 ## archiveScript - script on remote host for archiving uploaded image
-archiveScript = sprintf("convert %s/currentFORCERadarImage.jpg -transparent black %s/currentFORCERadarImage.png; /home/john/proj/force_radar_website/archive_image.py",
-    scpDestDir, scpDestDir)
+archiveScript = "/home/john/proj/force_radar_website/archive_image.py"
 
 ## removal zone - range of azimuths to drop from image
 removal = NULL
@@ -161,7 +160,8 @@ dbFile = dbFiles[order(file.info(dbFiles)$mtime, decreasing=TRUE)[1]]
 
 dyn.load("/home/radar/capture/capture_lib.so") 
 library(RSQLite)
-library(jpeg)
+##library(jpeg)
+library(png)
 
 ## loop for a while, trying to connect; the db is initially locked by rpcapture
 
@@ -235,15 +235,15 @@ while (TRUE) {
 
   ## Note: write PNG to newFORCERadarImage.png, then rename to currentFORCERadarImage.png so that
   ##
-  ## pngFile = file(file.path(dbDir, "currentFORCERadarImage.png"), "wb")
-  ## writePNG(pix, pngFile)
-  ## close(pngFile)
-  jpgFile = file(file.path(tmpDir, "currentFORCERadarImage.jpg"), "wb")
-  writeJPEG(pix, jpgFile, quality=0.5, bg="black") ## this is actually sufficient!
-  close(jpgFile)
+  pngFile = file(file.path(tmpDir, "currentFORCERadarImage.png"), "wb")
+  writePNG(pix, pngFile)
+  close(pngFile)
+  ## jpgFile = file(file.path(tmpDir, "currentFORCERadarImage.jpg"), "wb")
+  ## writeJPEG(pix, jpgFile, quality=0.5, bg="black") ## this is actually sufficient!
+  ## close(jpgFile)
   ## Copy file to server, then rename 'current' to plain version; this
   ## is done atomically, so that if the web server process is serving
   ## the file, it serves either the complete previous image, or the
   ## complete new image, rather than a partial or corrupt image.
-  system(sprintf("scp -q %s/currentFORCERadarImage.jpg %s/FORCERadarSweepMetadata.txt %s:%s; ssh %s '%s'", tmpDir, tmpDir, scpDestUser, scpDestDir, scpDestUser, archiveScript))
+  system(sprintf("scp -q %s/currentFORCERadarImage.png %s/FORCERadarSweepMetadata.txt %s:%s; ssh %s '%s'", tmpDir, tmpDir, scpDestUser, scpDestDir, scpDestUser, archiveScript))
 } 
