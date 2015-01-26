@@ -18,6 +18,7 @@
 
 ##dbDir = "/mnt/3tb/force_data"
 dbDir = "/media/FORCE_radar_1/"
+tmpDir = "/tmp"
 
 ## Samples per pulse: set by the capture program script; at the full
 ##   digitizing rate of 125 MHz, range per sample is 1.2 metres, so
@@ -62,7 +63,8 @@ scpDestUser = "force-radar@discovery"
 scpDestDir = "/home/www/html/htdocs/force/"
 
 ## archiveScript - script on remote host for archiving uploaded image
-archiveScript = "/home/john/proj/force_radar_website/archive_image.py"
+archiveScript = sprintf("convert %s/currentFORCERadarImage.jpg -transparent black %s/currentFORCERadarImage.png; /home/john/proj/force_radar_website/archive_image.py",
+    scpDestDir, scpDestDir)
 
 ## removal zone - range of azimuths to drop from image
 removal = NULL
@@ -159,7 +161,7 @@ dbFile = dbFiles[order(file.info(dbFiles)$mtime, decreasing=TRUE)[1]]
 
 dyn.load("/home/radar/capture/capture_lib.so") 
 library(RSQLite)
-library(png)
+library(jpeg)
 
 ## loop for a while, trying to connect; the db is initially locked by rpcapture
 
@@ -219,7 +221,7 @@ while (TRUE) {
     aziRangeOffsets = scan(aziRangeOffsetsFile, sep=",", quiet=TRUE)
 
   ## output timestamp of last pulse, and azi/range offsets
-  cat(sprintf("{\n  \"ts\": %.3f,\n  \"samplesPerPulse\": %d,\n  \"pulsesPerSweep\": %d,\n  \"width\": %d,\n   \"height\": %d,\n  \"xlim\": [%f, %f],\n   \"ylim\": [%f, %f],\n  \"ppm\": %f,\n \"aziOffset\": %f,\n  \"rangeOffset\": %f,\n  \"samplingRate\": %f\n}", tail(x$ts, 1), samplesPerPulse, pulsesPerSweep, iwidth, iheight, xlim[1], xlim[2], ylim[1], ylim[2], ppm, aziRangeOffsets[1], aziRangeOffsets[2], samplingRate / decimation ), file=file.path(dbDir, "FORCERadarSweepMetadata.txt"))
+  cat(sprintf("{\n  \"ts\": %.3f,\n  \"samplesPerPulse\": %d,\n  \"pulsesPerSweep\": %d,\n  \"width\": %d,\n   \"height\": %d,\n  \"xlim\": [%f, %f],\n   \"ylim\": [%f, %f],\n  \"ppm\": %f,\n \"aziOffset\": %f,\n  \"rangeOffset\": %f,\n  \"samplingRate\": %f\n}", tail(x$ts, 1), samplesPerPulse, pulsesPerSweep, iwidth, iheight, xlim[1], xlim[2], ylim[1], ylim[2], ppm, aziRangeOffsets[1], aziRangeOffsets[2], samplingRate / decimation ), file=file.path(tmpDir, "FORCERadarSweepMetadata.txt"))
 
   ## if necessary, regenerate scan converter
   if (is.null(scanConv) || ! identical(aziRangeOffsets, lastAziRangeOffsets)) {
@@ -233,12 +235,15 @@ while (TRUE) {
 
   ## Note: write PNG to newFORCERadarImage.png, then rename to currentFORCERadarImage.png so that
   ##
-  pngFile = file(file.path(dbDir, "currentFORCERadarImage.png"), "wb")
-  writePNG(pix, pngFile)
-  close(pngFile)
+  ## pngFile = file(file.path(dbDir, "currentFORCERadarImage.png"), "wb")
+  ## writePNG(pix, pngFile)
+  ## close(pngFile)
+  jpgFile = file(file.path(tmpDir, "currentFORCERadarImage.jpg"), "wb")
+  writeJPEG(pix, jpgFile, quality=0.5, bg="black") ## this is actually sufficient!
+  close(jpgFile)
   ## Copy file to server, then rename 'current' to plain version; this
   ## is done atomically, so that if the web server process is serving
   ## the file, it serves either the complete previous image, or the
   ## complete new image, rather than a partial or corrupt image.
-  system(sprintf("scp -q %s/currentFORCERadarImage.png %s/FORCERadarSweepMetadata.txt %s:%s; ssh %s %s", dbDir, dbDir, scpDestUser, scpDestDir, scpDestUser, archiveScript))
+  system(sprintf("scp -q %s/currentFORCERadarImage.jpg %s/FORCERadarSweepMetadata.txt %s:%s; ssh %s '%s'", tmpDir, tmpDir, scpDestUser, scpDestDir, scpDestUser, archiveScript))
 } 

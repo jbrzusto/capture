@@ -185,4 +185,4 @@ ssh -f -n root@$DIGDARHOST "/opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c 
 sleep 3
 
 # start generating and pushing live images
-/home/radar/capture/pushLiveImages.R --samples $NUMSAMP --sampling_rate 125e6 --decim $DECIM $REMOVE > $DATADIR/$LOGFILE 2>&1 &
+/home/radar/capture/pushLiveImages.R --dbdir $DATADIR --samples $NUMSAMP --sampling_rate 125e6 --decim $DECIM $REMOVE > $DATADIR/$LOGFILE 2>&1 &
