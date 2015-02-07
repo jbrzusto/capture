@@ -222,7 +222,7 @@ capture_db::record_geo (double ts, double lat, double lon, double elev, double h
   sqlite3_bind_double (st, 2, lat);
   sqlite3_bind_double (st, 3, lon);
   sqlite3_bind_double (st, 4, elev);
-  sqlite3_bind_double (st, 5, elev);
+  sqlite3_bind_double (st, 5, heading);
   sqlite3_step (st);
   sqlite3_finalize (st);
 };
