@@ -29,12 +29,12 @@ capture_db::capture_db (std::string filename, std::string sem_name, std::string 
 {
   sem_latest_pulse_timestamp = sem_open(sem_name.c_str(), O_CREAT | O_RDWR, S_IRWXU + S_IRWXG + S_IROTH);
   if (! sem_latest_pulse_timestamp) {
-    throw std::runtime_error("Coudln't open semaphore");
+    throw std::runtime_error("Couldn't open semaphore");
   }
 
   shm_latest_pulse_timestamp = shm_open(shm_name.c_str(), O_CREAT | O_RDWR, S_IRWXU + S_IRWXG + S_IROTH);
   if (! shm_latest_pulse_timestamp) {
-    throw std::runtime_error("Coudln't open shared memory");
+    throw std::runtime_error("Couldn't open shared memory");
   };
 
   if (SQLITE_OK != sqlite3_open_v2(filename.c_str(),
@@ -43,8 +43,10 @@ capture_db::capture_db (std::string filename, std::string sem_name, std::string 
                                    0))
     throw std::runtime_error("Couldn't open database for output");
 
+  sqlite3_exec(db, "pragma page_size=65536;", 0, 0, 0);
   sqlite3_exec(db, "pragma journal_mode=WAL;", 0, 0, 0);
-  sqlite3_exec(db, "pragma wal_autocheckpoint=5000;", 0, 0, 0);
+  sqlite3_exec(db, "pragma wal_autocheckpoint=1000;", 0, 0, 0);
+  sqlite3_exec(db, "pragma cache_size=5000;", 0, 0, 0);
 
   ensure_tables();
 
