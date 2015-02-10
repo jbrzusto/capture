@@ -19,7 +19,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-capture_db::capture_db (std::string filename, std::string sem_name, std::string shm_name) :
+capture_db::capture_db (std::string filename) :
   pulses_per_transaction(512),
   radar_mode (-1),
   digitize_mode (-1),
@@ -27,16 +27,6 @@ capture_db::capture_db (std::string filename, std::string sem_name, std::string 
   sweep_count(0),
   st_record_pulse(0)
 {
-  sem_latest_pulse_timestamp = sem_open(sem_name.c_str(), O_CREAT | O_RDWR, S_IRWXU + S_IRWXG + S_IROTH);
-  if (! sem_latest_pulse_timestamp) {
-    throw std::runtime_error("Couldn't open semaphore");
-  }
-
-  shm_latest_pulse_timestamp = shm_open(shm_name.c_str(), O_CREAT | O_RDWR, S_IRWXU + S_IRWXG + S_IROTH);
-  if (! shm_latest_pulse_timestamp) {
-    throw std::runtime_error("Couldn't open shared memory");
-  };
-
   if (SQLITE_OK != sqlite3_open_v2(filename.c_str(),
                   & db,
                   SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
@@ -51,11 +41,6 @@ capture_db::capture_db (std::string filename, std::string sem_name, std::string 
   ensure_tables();
 
   set_retain_mode("full");
-
-  ftruncate(shm_latest_pulse_timestamp, sizeof(double));
-  latest_pulse_timestamp = (double *) mmap(0, sizeof(double), PROT_READ | PROT_WRITE, MAP_SHARED, shm_latest_pulse_timestamp, 0);
-  *latest_pulse_timestamp = 0;
-  sem_post (sem_latest_pulse_timestamp);
 }
 
 capture_db::~capture_db () {
@@ -68,9 +53,6 @@ capture_db::~capture_db () {
   sqlite3_exec(db, "pragma journal_mode=delete;", 0, 0, 0);
   sqlite3_close (db);
   db = 0;
-  sem_close (sem_latest_pulse_timestamp);
-  munmap (latest_pulse_timestamp, sizeof(double));
-  close (shm_latest_pulse_timestamp);
 };
 
 void
@@ -266,11 +248,6 @@ capture_db::record_pulse (double ts, uint32_t trigs, uint32_t trig_clock, float 
     sqlite3_exec (db, "commit", 0, 0, 0);
     sqlite3_finalize (st_record_pulse);
     st_record_pulse = 0;
-    
-    // store the timestamp of the latest committed pulse to shared memory, protected by a semaphore
-    sem_wait (sem_latest_pulse_timestamp);
-    * latest_pulse_timestamp = ts;
-    sem_post (sem_latest_pulse_timestamp);
   }
 };
 

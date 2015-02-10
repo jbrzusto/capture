@@ -13,7 +13,6 @@
 #pragma once
 #include <string>
 #include <sqlite3.h>
-#include <semaphore.h>
 
 /**
    @class capture_db 
@@ -23,49 +22,49 @@
 class capture_db {
  public:
 
-  //! anonymous enum of sample formats
+  //!< anonymous enum of sample formats
   enum {FORMAT_PACKED_FLAG = 512};
 
-  //! constructor which opens a connection to the SQLITE file
-  capture_db (std::string filename, std::string sem_name, std::string shm_name);
+  //!< constructor which opens a connection to the SQLITE file
+  capture_db (std::string filename);
 
-  //! destructor which closes connection to the SQLITE file
+  //!< destructor which closes connection to the SQLITE file
   ~capture_db (); // close the database file
 
-  //! ensure required tables exist in database
+  //!< ensure required tables exist in database
   void ensure_tables ();
   
-  //! set the mode for subsequent capture
+  //!< set the mode for subsequent capture
   void set_radar_mode (double power, double plen, double prf, double rpm);
 
-  //! set the digitize mode; returns the mode key
+  //!< set the digitize mode; returns the mode key
   void set_digitize_mode (double rate, int format, int scale, int ns);
 
-  //! set the retain mode
+  //!< set the retain mode
   void set_retain_mode (std::string mode);
 
-  //! clear the range records for a retain mode 
+  //!< clear the range records for a retain mode 
   void clear_retain_mode (std::string mode);
 
-  //! are we retaining all pulses per sample?
+  //!< are we retaining all pulses per sample?
   bool is_full_retain_mode();
   
-  //! record geographic info
+  //!< record geographic info
   void record_geo (double ts, double lat, double lon, double alt, double heading);
 
-  //! record data from a single pulse
+  //!< record data from a single pulse
   void record_pulse (double ts, uint32_t trigs, uint32_t trig_clock, float azi, uint32_t num_arp, float elev, float rot, void * buffer);
 
-  //! record a parameter setting
+  //!< record a parameter setting
   void record_param (double ts, std::string param, double val);
 
-  //! set the number of pulses per transaction; caller is guaranteeing
-  //! data for this many consecutive pulses is effectively static
-  //! so that sqlite need not make a private copy before commiting the
-  //! INSERT transaction.
+  //!< set the number of pulses per transaction; caller is guaranteeing
+  //!< data for this many consecutive pulses is effectively static
+  //!< so that sqlite need not make a private copy before commiting the
+  //!< INSERT transaction.
   void set_pulses_per_transaction(int pulses_per_transaction);
 
-  //! get the number of pulses per transaction
+  //!< get the number of pulses per transaction
   int get_pulses_per_transaction();
 
  protected:
@@ -77,8 +76,8 @@ class capture_db {
   int retain_mode; //!< unique ID of current retain mode (negative means retail all samples per pulse)
   std::string retain_mode_name; //!< name of retain mode
 
-  double digitize_rate; //! < current digitizer rate
-  int digitize_format; //! < current digitizer format
+  double digitize_rate; //!< < current digitizer rate
+  int digitize_format; //!< < current digitizer format
   int digitize_ns; //!< current digitizer number of samples per pulse
   int digitize_num_bytes; //!< current digitizer number of bytes per pulse
 
@@ -88,10 +87,6 @@ class capture_db {
   sqlite3 * db; //<! handle to sqlite connection
   sqlite3_stmt * st_record_pulse; //!< pre-compiled statement for recording raw pulses
 
-  sem_t * sem_latest_pulse_timestamp; //<! semaphore to protect timestamp of committed data
-  int shm_latest_pulse_timestamp; //<! handle to shared memory for storing latest committed pulse timestamp
-  double * latest_pulse_timestamp; //<! pointer to storage for latest pulse timestamp in sharted memory
-
-  //! update overall mode, given a component mode (radar, digitize, retain) has changed
+  //!< update overall mode, given a component mode (radar, digitize, retain) has changed
   void update_mode(); 
 };

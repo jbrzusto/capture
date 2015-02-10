@@ -23,12 +23,18 @@ capture.o: capture.cc capture_db.h
 	g++ $(CPPOPTS) $(USRP_INCLUDE) -o $@ -c capture.cc
 
 rpcapture.o: rpcapture.cc capture_db.h pulse_metadata.h
-	g++ $(CPPOPTS) $(USRP_INCLUDE) -o $@ -c rpcapture.cc
+	g++ $(CPPOPTS) -o $@ -c rpcapture.cc
 
 capture: capture.o capture_db.o
 	gcc $(COPTS) -o $@ $^ $(USRP_LIBS) $(LIBS)
 
-rpcapture: rpcapture.o capture_db.o
+shared_ring_buffer.o: shared_ring_buffer.cc shared_ring_buffer.h
+	g++ $(CPPOPTS) -o $@ -c shared_ring_buffer.cc
+
+tcp_reader.o: tcp_reader.cc tcp_reader.h
+	g++ $(CPPOPTS) -o $@ -c tcp_reader.cc
+
+rpcapture: rpcapture.o capture_db.o shared_ring_buffer.o tcp_reader.o
 	g++ $(COPTS) -o $@ $^ $(LIBS)
 
 scan_converter.o: scan_converter.h scan_converter.cc

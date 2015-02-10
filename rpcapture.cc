@@ -57,15 +57,17 @@
 #include <boost/program_options.hpp>
 #include "capture_db.h"
 #include "pulse_metadata.h"
+#include "shared_ring_buffer.h"
+#include "tcp_reader.h"
 
 namespace po = boost::program_options;
 
 #include <sched.h>
 
 #define MAX_N_SAMPLES 16384
-#define PULSES_PER_TRANSACTION 100
+#define PULSES_PER_TRANSACTION 500
 
-static void do_capture (capture_db * cap, int n_samples);
+static void do_capture (capture_db * cap, unsigned short n_samples, unsigned n_pulses, const std::string & interface, const std::string & port);
 
 double now() {
   static struct timespec ts;
@@ -98,8 +100,11 @@ int main(int argc, char *argv[])
   unsigned int		decim		   = 1;	// decimation rate
 
   unsigned short	n_samples	   = 3000;	// set the number of samples per pulse
+  unsigned      	n_pulses	   = 6000;	// set the number of pulses to buffer from network
 
   std::string		filename	   = "capture_data.sqlite";
+  std::string           port               = "12345";
+  std::string           interface          = "0.0.0.0";
   int                   quiet              = false;     // don't output diagnostics to stdout
   po::options_description	cmdconfig("Usage: rpcapture [options] [filename]");
 
@@ -107,8 +112,11 @@ int main(int argc, char *argv[])
     ("help,h", "produce help message")
     ("decim,d", po::value<unsigned int>(&decim), "set fgpa decimation rate (1, 2, 3, 4, 8, 1024, 8192, or 65536; default is 1)")
     ("n_samples,n", po::value<unsigned short>(&n_samples), "number of samples to collect per pulse; default is 512; max is 16384")
+    ("n_pulses,p", po::value<unsigned>(&n_pulses), "number of pulses to buffer from digitizer on network; default is 6000")
     ("quiet,q", "don't output diagnostics")
     ("realtime,T", "try to request realtime priority for process")
+    ("port,P", po::value<std::string>(&port), "listen for incoming data on tcp port PORT; default is 12345")
+    ("interface,i", po::value<std::string>(&interface), "bind listen port on this interface; default is all interfaces (0.0.0.0)")
     ;
 
   po::options_description fileconfig("Input file options");
@@ -134,6 +142,12 @@ int main(int argc, char *argv[])
 
   if (vm.count("quiet")) 
     quiet = true;
+
+  if (vm.count("interface"))
+    interface = vm["interface"].as<std::string>();
+
+  if (vm.count("port"))
+    port = vm["port"].as<std::string>();
 
   if (vm.count("filename")) {
     filename = vm["filename"].as<std::string>();
@@ -161,10 +175,13 @@ int main(int argc, char *argv[])
   if (n_samples > MAX_N_SAMPLES)
     perror ("Too many samples requested; max is 16384");
 
+  if (vm.count("n_pulses"))
+    n_pulses = vm["n_pulses"].as<unsigned>();
+
   if (vm.count("decim"))
     decim = vm["decim"].as<unsigned int>();
 
-  cap = new capture_db(filename, "capture_pulse_timestamp", "/capture_pulse_timestamp");
+  cap = new capture_db(filename);
 
   // assume short-pulse mode for Bridgemaster E
 
@@ -176,7 +193,7 @@ int main(int argc, char *argv[])
 
   // record digitizing mode
   cap->set_digitize_mode( 125e6 / decim, // digitizing rate, Hz
-                         16,   // only uses lowest 14 bits when truncated average
+                         16,   // only uses lowest 14 bits when decim == 1 or decim > 4
                           ((decim <= 4) ? decim : 1 ) * (1<<14 - 1), // scale: max sample value possible
                           n_samples  // samples per pulse
                          );
@@ -190,18 +207,27 @@ int main(int argc, char *argv[])
               45.371357, -64.402784, 30, // lat, lon, alt of FORCE VC radar site
               136.8); // heading offset, in degrees clockwise from north, for radar at FORCE VC
 
-  do_capture (cap, n_samples);
+  try {
+    do_capture (cap, n_samples, n_pulses, interface, port);
+  } catch (std::runtime_error e)
+    {
+    };
 
+  delete cap;
   return 0;
-}
+};
+
+static void * 
+run_reader(void * tcpr) {
+  tcp_reader *ptcpr = (tcp_reader *) tcpr;
+  ptcpr->go();
+  return 0;
+};
 
 static void
-do_capture  (capture_db * cap, int n_samples)
+do_capture  (capture_db * cap, unsigned short n_samples, unsigned n_pulses, const std::string &interface, const std::string &port)
 {
   uint16_t psize = sizeof(pulse_metadata) + sizeof(uint16_t) * (n_samples - 1);
-
-  unsigned char pulsebuf [psize];
-  pulse_metadata * meta = (pulse_metadata *) & pulsebuf[0];
 
   bool okay = true;
   
@@ -209,15 +235,29 @@ do_capture  (capture_db * cap, int n_samples)
   uint32_t num_arp = 0;
   uint32_t num_acp_at_arp = 0;
 
-  for ( ;; ) {
-    int n =  fread(& pulsebuf, psize, 1, stdin);
-    if (1 != n) {
-      fputs("Unable to read radar pulse - quitting\n", stderr);
-      break;
-    }
+  shared_ring_buffer srb(psize, n_pulses);
+  tcp_reader tcpr(interface, port, &srb);
 
+  pthread_t read_thread;
+
+  int pc = 0;
+  if (pthread_create(& read_thread, NULL, & run_reader, & tcpr))
+      throw std::runtime_error("Unable to create reader thread\n");
+
+  for ( ;; ) {
+    unsigned char * pulsebuf = srb.read_chunk();
+    if (! pulsebuf) {
+      // quit if tcp reader is done
+      if (srb.is_done())
+        break;
+      usleep(10000); // sleep 10 ms before retrying
+      continue;
+    }
+    pulse_metadata * meta = (pulse_metadata *) & pulsebuf[0];
+    if (meta->magic_number == PULSE_METADATA_DONE_MAGIC)
+      break;
     if (meta->magic_number != PULSE_METADATA_MAGIC) {
-      fputs("Bad Magic Number on radar pulse - quitting\n", stderr);
+      std::cerr << "Bad Magic Number on radar pulse - quitting\n";
       break;
     }
 
@@ -228,6 +268,7 @@ do_capture  (capture_db * cap, int n_samples)
 
     // calculate azimuth based on count of ACPs since most recent ARP.
 
+    ++pc;
     cap->record_pulse (ts,
                        meta->num_trig,
                        meta->trig_clock,
@@ -236,5 +277,6 @@ do_capture  (capture_db * cap, int n_samples)
                        0, // constant 0 elevation angle for FORCE radar
                        0, // constant polarization for FORCE radar
                        (uint16_t *) & pulsebuf[sizeof(pulse_metadata) - sizeof(uint16_t)]);
+    //    std::cerr << "Wrote pulses to database: " << pc << "\n";
   }
 }

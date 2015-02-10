@@ -12,6 +12,7 @@
 #include <stdint.h>
 
 #define PULSE_METADATA_MAGIC 0xf00ff00fabcddcbaLL
+#define PULSE_METADATA_DONE_MAGIC 0xf00ff00f0ff00ff0LL
 
 typedef struct {
   uint64_t magic_number;   // magic number for syncing headers; stores PULSE_METADATA_MAGIC
