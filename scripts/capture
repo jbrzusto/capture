@@ -168,11 +168,9 @@ else
 fi
 
 # Listen on port PORT for raw pulse data from the redpitaya digitizer, and pipe this into
-# the capture process.  "-d" means don't hang up on no stdin, which is required for running
-# netcat in background as a pure listener
+# the capture process. 
 
-killall netcat
-( netcat -d -l $PORT | /home/radar/capture/rpcapture -d $DECIM -n $NUMSAMP -T $DATADIR/$OUTFILE) &
+/home/radar/capture/rpcapture -P $PORT -d $DECIM -n $NUMSAMP -T $DATADIR/$OUTFILE &
 
 # set the red pitaya's RTC.  FIXME: we should be running ntpd or chrony
 # on there instead!  Precision here is 1s.
