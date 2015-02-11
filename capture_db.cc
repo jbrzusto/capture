@@ -36,8 +36,8 @@ capture_db::capture_db (std::string filename) :
     throw std::runtime_error("Couldn't open database for output");
 
   sqlite3_exec(db, "pragma page_size=65536;", 0, 0, 0);
-  sqlite3_exec(db, "pragma journal_mode=WAL;", 0, 0, 0);
-  sqlite3_exec(db, "pragma wal_autocheckpoint=0;", 0, 0, 0);
+  sqlite3_exec(db, "pragma journal_mode=TRUNCATE;", 0, 0, 0);
+  //  sqlite3_exec(db, "pragma wal_autocheckpoint=0;", 0, 0, 0);
   sqlite3_exec(db, "pragma cache_size=5000;", 0, 0, 0);
 
   ensure_tables();
@@ -250,11 +250,11 @@ capture_db::record_pulse (double ts, uint32_t trigs, uint32_t trig_clock, float 
     sqlite3_exec (db, "commit", 0, 0, 0);
     sqlite3_finalize (st_record_pulse);
     st_record_pulse = 0;
-    if (++commit_count >= commits_per_checkpoint) {
-      commit_count = 0;
-      // wal checkpoint after commit, to avoid this happening in one large chunk
-      sqlite3_wal_checkpoint (db, 0);
-    }
+    // if (++commit_count >= commits_per_checkpoint) {
+    //   commit_count = 0;
+    //   // wal checkpoint after commit, to avoid this happening in one large chunk
+    //   //      sqlite3_wal_checkpoint (db, 0);
+    // }
   }
 };
 
