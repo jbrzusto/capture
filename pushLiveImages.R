@@ -188,7 +188,7 @@ pal = readRDS("/home/radar/capture/radarImagePalette.rds")  ## low-overhead read
 
 while (TRUE) {
   gc(verbose=FALSE)
-##  Sys.sleep(0.1)
+  Sys.sleep(0.1)
   ## see how far the pulse capturing has gone.
   ## For now, we look for the latest complete sweep.  For later, we'll generate images chunk by chunk (e.g. quadrant
   ## by quadrant) for finer-grained screen update.  The trick is not to query too close to the leading
@@ -198,7 +198,18 @@ while (TRUE) {
 ##  ts = .Call("get_latest_pulse_timestamp") ## this is an atomic read from semaphore-protected shared memory
 
   ## get the key for the sweep before the one being filled now
-  sk = dbGetQuery(con, sprintf("select distinct sweep_key from pulses order by sweep_key desc limit 2", ts))[2, 1]
+  sk = NULL
+  while (is.null(sk)) {
+      tryCatch (
+          {
+              sk = dbGetQuery(con, sprintf("select distinct sweep_key from pulses order by sweep_key desc limit 2", ts))[2, 1]
+          },
+          error = function(e) {
+              Sys.sleep(0.1)
+          }
+          )
+  }
+  
   
   if (! isTRUE(sk != last.sk && sk > 0))
     next
@@ -206,7 +217,21 @@ while (TRUE) {
   last.sk = sk
 
   ## get all pulses for this sweep
-  x = dbGetQuery(con, sprintf("select * from pulses where sweep_key = %d order by ts", sk))
+  x = NULL
+
+  while (is.null(x)) {
+      tryCatch (
+          {
+              x = dbGetQuery(con, sprintf("select * from pulses where sweep_key = %d order by ts", sk))
+          },
+          error = function(e) {
+              Sys.sleep(0.1)
+          }
+          )
+  }
+  
+  
+
   options(digits=14)
 
   ## get pulses uniformly spread around circle

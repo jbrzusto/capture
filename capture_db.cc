@@ -35,6 +35,7 @@ capture_db::capture_db (std::string filename) :
                                    0))
     throw std::runtime_error("Couldn't open database for output");
 
+  sqlite3_exec(db, "pragma locking_mode=NORMAL;", 0, 0, 0);
   sqlite3_exec(db, "pragma page_size=65536;", 0, 0, 0);
   sqlite3_exec(db, "pragma journal_mode=TRUNCATE;", 0, 0, 0);
   //  sqlite3_exec(db, "pragma wal_autocheckpoint=0;", 0, 0, 0);
