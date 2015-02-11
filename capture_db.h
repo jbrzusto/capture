@@ -87,6 +87,9 @@ class capture_db {
   sqlite3 * db; //<! handle to sqlite connection
   sqlite3_stmt * st_record_pulse; //!< pre-compiled statement for recording raw pulses
 
+  int commits_per_checkpoint; //!< how many commits before we manually to a wal checkpoint
+  int commit_count; //!< counter for commits to allow appropriate checkpointing
+
   //!< update overall mode, given a component mode (radar, digitize, retain) has changed
   void update_mode(); 
 };

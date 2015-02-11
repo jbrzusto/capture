@@ -25,7 +25,9 @@ capture_db::capture_db (std::string filename) :
   digitize_mode (-1),
   last_num_arp(0xffffffff), // start at large value, so first pulse begins a new sweep
   sweep_count(0),
-  st_record_pulse(0)
+  st_record_pulse(0),
+  commits_per_checkpoint(5),
+  commit_count(0)
 {
   if (SQLITE_OK != sqlite3_open_v2(filename.c_str(),
                   & db,
@@ -35,7 +37,7 @@ capture_db::capture_db (std::string filename) :
 
   sqlite3_exec(db, "pragma page_size=65536;", 0, 0, 0);
   sqlite3_exec(db, "pragma journal_mode=WAL;", 0, 0, 0);
-  sqlite3_exec(db, "pragma wal_autocheckpoint=1000;", 0, 0, 0);
+  sqlite3_exec(db, "pragma wal_autocheckpoint=0;", 0, 0, 0);
   sqlite3_exec(db, "pragma cache_size=5000;", 0, 0, 0);
 
   ensure_tables();
@@ -248,6 +250,11 @@ capture_db::record_pulse (double ts, uint32_t trigs, uint32_t trig_clock, float 
     sqlite3_exec (db, "commit", 0, 0, 0);
     sqlite3_finalize (st_record_pulse);
     st_record_pulse = 0;
+    if (++commit_count >= commits_per_checkpoint) {
+      commit_count = 0;
+      // wal checkpoint after commit, to avoid this happening in one large chunk
+      sqlite3_wal_checkpoint (db, 0);
+    }
   }
 };
 
