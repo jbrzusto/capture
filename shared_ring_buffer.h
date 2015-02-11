@@ -33,6 +33,24 @@ class shared_ring_buffer {
   //! write data to the next available chunk in the buffer
   void write_chunk (unsigned char *p);
 
+  //! let writer indicate they are using current chunk
+  void begin_writing_chunk();
+
+  //! let writer indicate they are done with current chunk
+  void done_writing_chunk();
+
+  //! is writer done with current chunk?
+  bool is_done_writing_chunk();
+
+  //! let reader indicate they are using current chunk
+  void begin_reading_chunk();
+
+  //! let reader indicate they are done with current chunk
+  void done_reading_chunk();
+
+  //! is reader done with current chunk?
+  bool is_done_reading_chunk();
+
   //! let reader or writer indicate they are done
   void done();
 
@@ -58,7 +76,13 @@ class shared_ring_buffer {
   //! chunk number currently being written to; -1 means none
   int writer_chunk_index;
 
-  //! mutex to protect read/write indexes
+  //! true iff chunk write for current index has completed
+  bool chunk_write_complete;
+
+  //! true iff chunk write for current index has completed
+  bool chunk_read_complete;
+
+  //! mutex to protect read/write above three fields indexes
   pthread_mutex_t index_mutex;
 
   //! flag set to true when either reader or writer is finished

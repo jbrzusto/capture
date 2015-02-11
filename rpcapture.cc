@@ -154,7 +154,7 @@ int main(int argc, char *argv[])
   }
 
   if (vm.count("realtime")) {
-    int policy = SCHED_FIFO;
+    int policy = SCHED_RR;
     int pri = (sched_get_priority_max (policy) - sched_get_priority_min (policy)) / 2;
     int pid = 0;  // this process
     
@@ -166,7 +166,7 @@ int main(int argc, char *argv[])
       perror ("sched_setscheduler: failed to set real time priority");
     }
     else
-      printf("SCHED_FIFO enabled with priority = %d\n", pri);
+      printf("SCHED_RR enabled with priority = %d\n", pri);
   }
 
   if (vm.count("n_samples"))
