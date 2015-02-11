@@ -99,6 +99,7 @@ tcp_reader::go() {
       p += m;
       n -= m;
     } while (n > 0);
+    buf->done_writing_chunk();
     ++pc;
     //    std::cerr << "Read pulses from socket: " << pc << "\n";
   } while (m >= 0);

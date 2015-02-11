@@ -278,5 +278,6 @@ do_capture  (capture_db * cap, unsigned short n_samples, unsigned n_pulses, cons
                        0, // constant polarization for FORCE radar
                        (uint16_t *) & pulsebuf[sizeof(pulse_metadata) - sizeof(uint16_t)]);
     //    std::cerr << "Wrote pulses to database: " << pc << "\n";
+    srb.done_reading_chunk();
   }
 }
