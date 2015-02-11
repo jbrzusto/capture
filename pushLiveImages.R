@@ -165,17 +165,6 @@ library(png)
 
 ## loop for a while, trying to connect; the db is initially locked by rpcapture
 
-con = NULL
-while (is.null(con)) {
-    tryCatch (
-        {
-            con = dbConnect("SQLite", dbFile)
-        },
-        error = function(e) {
-            Sys.sleep(1)
-        }
-        )
-}
 
 pix = matrix(0L, iheight, iwidth)
 class(pix)="nativeRaster"
@@ -194,7 +183,19 @@ while (TRUE) {
   ## by quadrant) for finer-grained screen update.  The trick is not to query too close to the leading
   ## edge of data, as this can cause indefinite growth in the size of the sqlite write-ahead-log file and/or
   ## cache file(s).
-  
+
+  con = NULL
+  while (is.null(con)) {
+      tryCatch (
+          {
+              con = dbConnect("SQLite", dbFile)
+          },
+          error = function(e) {
+              Sys.sleep(1)
+          }
+          )
+  }
+
 ##  ts = .Call("get_latest_pulse_timestamp") ## this is an atomic read from semaphore-protected shared memory
 
   ## get the key for the sweep before the one being filled now
@@ -229,7 +230,7 @@ while (TRUE) {
           }
           )
   }
-  
+  dbDisconnect(con)
   
 
   options(digits=14)
