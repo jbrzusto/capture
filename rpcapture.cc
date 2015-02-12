@@ -65,7 +65,7 @@ namespace po = boost::program_options;
 #include <sched.h>
 
 #define MAX_N_SAMPLES 16384
-#define PULSES_PER_TRANSACTION 500
+#define PULSES_PER_TRANSACTION 100
 
 static void do_capture (capture_db * cap, unsigned short n_samples, unsigned n_pulses, const std::string & interface, const std::string & port);
 
