@@ -44,6 +44,7 @@
 #include <iomanip>
 #include <cmath>
 #include <cstdio>
+#include <vector>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -98,11 +99,15 @@ int main(int argc, char *argv[])
   // sigaction (SIGILL, &sa, 0);
 
   unsigned int		decim		   = 1;	// decimation rate
+  unsigned int          file_duration      = 3600; // max duration per file, in seconds (to nearest sweep)
 
   unsigned short	n_samples	   = 3000;	// set the number of samples per pulse
   unsigned      	n_pulses	   = 6000;	// set the number of pulses to buffer from network
 
-  std::string		filename	   = "capture_data.sqlite";
+  std::string		file_prefix	   = "FORCEVC_raw";  // files begin with this, followed by "_" and a timestamp
+  std::vector < std::string > file_pathlist ();  // list of paths to try writing files to
+  file_pathlist.push_back(".");
+
   std::string           port               = "12345";
   std::string           interface          = "0.0.0.0";
   int                   quiet              = false;     // don't output diagnostics to stdout
@@ -115,13 +120,14 @@ int main(int argc, char *argv[])
     ("n_pulses,p", po::value<unsigned>(&n_pulses), "number of pulses to buffer from digitizer on network; default is 6000")
     ("quiet,q", "don't output diagnostics")
     ("realtime,T", "try to request realtime priority for process")
+    ("file_duration,d", po::value<unsigned int>(&time_period), "approximate maximum file duration, in seconds; default is 3600 = 1 hour.  Note: sweeps are not split between files, so actual file duration can be up to one sweep interval off specified value.")
     ("port,P", po::value<std::string>(&port), "listen for incoming data on tcp port PORT; default is 12345")
     ("interface,i", po::value<std::string>(&interface), "bind listen port on this interface; default is all interfaces (0.0.0.0)")
-    ;
+    ("file pathlist,f", po::value<std::vector < std::string> >(), "list of paths on which to try writing files; when one is filled, the next is tried; default is '.'");
 
   po::options_description fileconfig("Input file options");
   fileconfig.add_options()
-    ("filename", po::value<std::string>(), "output file")
+    ("file_prefix", po::value<std::string>(), "output file")
     ;
 
   po::positional_options_description inputfile;
@@ -139,7 +145,7 @@ int main(int argc, char *argv[])
     std::cout << cmdconfig << "\n";
     return 1;
   }
-
+     
   if (vm.count("quiet")) 
     quiet = true;
 
@@ -149,8 +155,8 @@ int main(int argc, char *argv[])
   if (vm.count("port"))
     port = vm["port"].as<std::string>();
 
-  if (vm.count("filename")) {
-    filename = vm["filename"].as<std::string>();
+  if (vm.count("file_prefix")) {
+    file_prefix = vm["file_prefix"].as<std::string>();
   }
 
   if (vm.count("realtime")) {
@@ -178,10 +184,13 @@ int main(int argc, char *argv[])
   if (vm.count("n_pulses"))
     n_pulses = vm["n_pulses"].as<unsigned>();
 
+     if (vm.count("file_pathlist"))
+    file_pathlist = vm["file_pathlist"].as<std::vector < std::string> >();
+
   if (vm.count("decim"))
     decim = vm["decim"].as<unsigned int>();
 
-  cap = new capture_db(filename);
+  cap = new capture_db (file_pathlist, file_prefix, file_duration);
 
   // assume short-pulse mode for Bridgemaster E
 
@@ -191,7 +200,7 @@ int main(int argc, char *argv[])
                         28  // antenna rotation rate, RPM
                       );
 
-  // record digitizing mode
+  // set digitizing mode
   cap->set_digitize_mode( 125e6 / decim, // digitizing rate, Hz
                          16,   // only uses lowest 14 bits when decim == 1 or decim > 4
                           ((decim <= 4) ? decim : 1 ) * (1<<14 - 1), // scale: max sample value possible
@@ -203,7 +212,7 @@ int main(int argc, char *argv[])
   cap->set_pulses_per_transaction (PULSES_PER_TRANSACTION); // commit to keeping data for at least PULSES_PER_TRANSACTION pulses
 
   double ts = now();
-  cap->record_geo(ts, 
+  cap->set_geo(ts, 
               45.371357, -64.402784, 30, // lat, lon, alt of FORCE VC radar site
               136.8); // heading offset, in degrees clockwise from north, for radar at FORCE VC
 

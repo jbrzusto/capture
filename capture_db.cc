@@ -18,31 +18,21 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include "boost/date_time/posix_time/posix_time.hpp"
 
-capture_db::capture_db (std::string filename) :
+capture_db::capture_db (std::vector < std::string > file_pathlist, std::string file_prefix, int file_duration) : 
   pulses_per_transaction(512),
-  radar_mode (-1),
-  digitize_mode (-1),
+  radar_mode_ID (-1),
+  digitize_mode_ID (-1),
+  file_pathlist (file_pathlist),
+  file_prefix (file_prefix),
+  file_duration (file_duration),
   last_num_arp(0xffffffff), // start at large value, so first pulse begins a new sweep
   sweep_count(0),
   st_record_pulse(0),
   commits_per_checkpoint(5),
   commit_count(0)
 {
-  if (SQLITE_OK != sqlite3_open_v2(filename.c_str(),
-                  & db,
-                  SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
-                                   0))
-    throw std::runtime_error("Couldn't open database for output");
-
-  sqlite3_exec(db, "pragma page_size=65536;", 0, 0, 0);
-  sqlite3_exec(db, "pragma journal_mode=WAL;", 0, 0, 0);
-  sqlite3_exec(db, "pragma wal_autocheckpoint=0;", 0, 0, 0);
-  sqlite3_exec(db, "pragma cache_size=5000;", 0, 0, 0);
-
-  ensure_tables();
-
-  set_retain_mode("full");
 }
 
 capture_db::~capture_db () {
@@ -55,6 +45,39 @@ capture_db::~capture_db () {
   sqlite3_exec(db, "pragma journal_mode=delete;", 0, 0, 0);
   sqlite3_close (db);
   db = 0;
+};
+
+void
+capture_db::open_db_file(boost::posix_time::ptime t) {
+  db = 0;
+  st_record_pulse = 0;
+  for (auto path = file_pathlist.begin(); path != file_pathlist.end(); ++path) {
+    std::string filename = * path;
+    filename += "/";
+    filename += file_prefix;
+    filename += "_";
+    filename += t.to_iso_string();
+    filename += ".sqlite";
+
+    if (SQLITE_OK == sqlite3_open_v2(filename.c_str(),
+                                     & db,
+                                     SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+                                     0))
+      break;
+  }
+  
+  if (!db)
+    throw std::runtime_error("Couldn't open database for output");
+
+  sqlite3_exec(db, "pragma page_size=65536;", 0, 0, 0);
+  sqlite3_exec(db, "pragma journal_mode=WAL;", 0, 0, 0);
+  sqlite3_exec(db, "pragma wal_autocheckpoint=0;", 0, 0, 0);
+  sqlite3_exec(db, "pragma cache_size=5000;", 0, 0, 0);
+
+  ensure_tables();
+
+  set_retain_mode("full");
+  file_end_time = t + boost::posix_time::seconds(file_duration);
 };
 
 void
@@ -160,44 +183,61 @@ capture_db::ensure_tables() {
 
 void 
 capture_db::set_radar_mode (double power, double plen, double prf, double rpm) {
+  radar_mode = radar_mode_t(power, plen, prf, rpm);
+  if (db)
+    record_radar_mode();
+};
+
+void 
+capture_db::record_radar_mode () {
   sqlite3_stmt *st;
   sqlite3_prepare_v2(db, "insert or replace into radar_modes (power, plen, prf, rpm) values (?, ?, ?, ?)",
                      -1, & st, 0);
-  sqlite3_bind_double (st, 1, power);
+  sqlite3_bind_double (st, 1, radar_mode.power);
   sqlite3_bind_double (st, 2, plen);
   sqlite3_bind_double (st, 3, prf);
   sqlite3_bind_double (st, 4, rpm);
   sqlite3_step (st);
-  radar_mode = sqlite3_last_insert_rowid (db);
+  radar_mode_ID = sqlite3_last_insert_rowid (db);
   sqlite3_finalize (st);
   update_mode();
 };
 
 void 
 capture_db::set_digitize_mode (double rate, int format, int scale, int ns) {
-  sqlite3_stmt *st;
-  sqlite3_prepare_v2(db, "insert or replace into digitize_modes (rate, format, ns, scale) values (?, ?, ?, ?)",
-                     -1, & st, 0);
-  sqlite3_bind_double (st, 1, rate);
-  sqlite3_bind_int (st, 2, format);
-  sqlite3_bind_int (st, 3, ns);
-  sqlite3_bind_int (st, 4, scale);
-  sqlite3_step (st);
-  digitize_mode = sqlite3_last_insert_rowid (db);
-  digitize_rate = rate;
-  digitize_format = format;
-  digitize_ns = ns;
+  digitize_mode = digitize_mode_t(rate, format, scale, ns);
   if (format & FORMAT_PACKED_FLAG) {
     digitize_num_bytes = (ns * (format & 0xff) + 7) / 8;  // full packing, rounded up to nearest byte
   } else {
     digitize_num_bytes = ns * (((format & 0xff) + 7) / 8);  // each sample takes integer number of bytes
   }
+  if (db)
+    record_digitize_mode();
+};  
+
+capture_db::record_digitize_mode () {
+  sqlite3_stmt *st;
+  sqlite3_prepare_v2(db, "insert or replace into digitize_modes (rate, format, ns, scale) values (?, ?, ?, ?)",
+                     -1, & st, 0);
+  sqlite3_bind_double (st, 1, digitize_mode.rate);
+  sqlite3_bind_int (st, 2, digitize_mode.format);
+  sqlite3_bind_int (st, 3, digitize_mode.ns);
+  sqlite3_bind_int (st, 4, digitize_mode.scale);
+  sqlite3_step (st);
+  digitize_mode_ID = sqlite3_last_insert_rowid (db);
   sqlite3_finalize (st);
   update_mode();
 };  
 
 void 
-capture_db::record_geo (double ts, double lat, double lon, double elev, double heading) {
+capture_db::set_geo (double ts, double lat, double lon, double elev, double heading) {
+  geo_info = geo_info_t(ts, lat, lon, elev, heading);
+  if (db)
+    record_geo();
+};
+
+void 
+capture_db::record_geo () {
   sqlite3_stmt *st;
   sqlite3_prepare_v2(db, "insert into geo (ts, lat, lon, alt, heading) values (?, ?, ?, ?, ?)",
                      -1, & st, 0);
@@ -230,7 +270,7 @@ capture_db::record_pulse (double ts, uint32_t trigs, uint32_t trig_clock, float 
   
   sqlite3_reset (st_record_pulse);
   sqlite3_bind_int (st_record_pulse, 1, sweep_count);
-  sqlite3_bind_int (st_record_pulse, 2, mode);
+  sqlite3_bind_int (st_record_pulse, 2, mode_ID);
   sqlite3_bind_double (st_record_pulse, 3, ts);
   sqlite3_bind_int    (st_record_pulse, 4, trigs);
   sqlite3_bind_double (st_record_pulse, 5, azi);
@@ -247,19 +287,47 @@ capture_db::record_pulse (double ts, uint32_t trigs, uint32_t trig_clock, float 
   ++pulses_written_this_trans;
   if (pulses_written_this_trans == pulses_per_transaction) {
     
-    sqlite3_exec (db, "commit", 0, 0, 0);
-    sqlite3_finalize (st_record_pulse);
-    st_record_pulse = 0;
-    if (++commit_count >= commits_per_checkpoint) {
-      commit_count = 0;
-      // wal checkpoint after commit, to avoid this happening in one large chunk
-      sqlite3_wal_checkpoint (db, 0);
+    if (! sqlite3_exec (db, "commit", 0, 0, 0)) {
+      // assume the problem is a full disk
+      // close the file and retry; we lose a transaction's worth
+      // of data when this happens
+      sqlite3_exec(db, "pragma journal_mode=delete;", 0, 0, 0);
+      sqlite3_finalize (st_record_pulse);
+      sqlite3_close (db);
+      db = 0;
+      // try open a new db with the current time
+      open_db_file(microsec_clock::universal_time());
+
+    } else {
+      sqlite3_finalize (st_record_pulse);
+      st_record_pulse = 0;
+      if (++commit_count >= commits_per_checkpoint) {
+        commit_count = 0;
+        // wal checkpoint after commit, to avoid this happening in one large chunk
+        sqlite3_wal_checkpoint (db, 0);
+      }
+      if (boost::posix_time::ptime(second_clock::local_time()) >= file_end_time) {
+          sqlite3_exec(db, "pragma journal_mode=delete;", 0, 0, 0);
+          sqlite3_finalize (st_record_pulse);
+          sqlite3_close (db);
+          db = 0;
+          // try open a new db with the current time
+          open_db_file(microsec_clock::universal_time());
+      }
     }
   }
 };
 
 void
 capture_db::set_retain_mode (std::string mode)
+{
+  retain_mode_name = mode;
+  if (db)
+    record_retain_mode();
+};
+
+void
+capture_db::record_retain_mode ()
 {
   sqlite3_stmt * st;
   sqlite3_prepare_v2(db, "select retain_mode_key from retain_modes where name = ?", 
@@ -271,8 +339,8 @@ capture_db::set_retain_mode (std::string mode)
     throw std::runtime_error(std::string("Non existent retain mode selected: '") + mode + "'");
   }
   retain_mode = sqlite3_column_int (st, 0);
-  retain_mode_name = mode;
   sqlite3_finalize (st);
+  update_mode();
 };
 
 void 
@@ -294,11 +362,11 @@ capture_db::update_mode() {
   sqlite3_stmt * st;
   sqlite3_prepare_v2(db, "insert or replace into modes (radar_mode_key, digitize_mode_key, retain_mode_key) values (?, ?, ?)",
                      -1, & st, 0);
-  sqlite3_bind_int (st, 1, radar_mode);
-  sqlite3_bind_int (st, 2, digitize_mode);
-  sqlite3_bind_int (st, 3, retain_mode); 
+  sqlite3_bind_int (st, 1, radar_mode_ID);
+  sqlite3_bind_int (st, 2, digitize_mode_ID);
+  sqlite3_bind_int (st, 3, retain_mode_ID); 
   sqlite3_step (st);
-  mode = sqlite3_last_insert_rowid (db);
+  mode_ID = sqlite3_last_insert_rowid (db);
   sqlite3_finalize (st);
 };
 
