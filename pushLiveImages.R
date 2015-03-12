@@ -188,7 +188,7 @@ while (TRUE) {
   while (is.null(con)) {
       tryCatch (
           {
-              con = dbConnect("SQLite", dbFile)
+              con = dbConnect(RSQLite::SQLite(), dbFile)
           },
           error = function(e) {
               Sys.sleep(1)
