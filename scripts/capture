@@ -4,7 +4,7 @@
 # local interface on subnet to which digdar digitizer is
 # attached
 
-LOCALHOST=10.42.0.2
+LOCALHOST=10.42.0.1
 
 # address of digdar digitizer
 DIGDARHOST=10.42.0.56
