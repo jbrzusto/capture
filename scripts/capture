@@ -4,7 +4,7 @@
 # local interface on subnet to which digdar digitizer is
 # attached
 
-LOCALHOST=10.42.0.2
+LOCALHOST=10.42.0.1
 
 # address of digdar digitizer
 DIGDARHOST=10.42.0.56
@@ -174,6 +174,7 @@ fi
 
 # set the red pitaya's RTC.  FIXME: we should be running ntpd or chrony
 # on there instead!  Precision here is 1s.
+sleep 1
 
 ssh -o ControlMaster=no -o ControlPath=none root@$DIGDARHOST date `date "+%m%d%H%M%Y.%S"`
 

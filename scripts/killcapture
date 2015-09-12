@@ -1,5 +1,4 @@
 #!/bin/sh
 killall rpcapture
 killall R
-killall netcat
-ssh root@rp killall netcat digdar
+ssh root@rp killall digdar

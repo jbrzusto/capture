@@ -19,7 +19,8 @@ fi
 
 # tunnel not working, so kill off any ssh processes to avoid zombies
 
-killall -KILL ssh
+old=`psg ssh | grep :30022: | awk '{print $1}'`
+kill -KILL $old
 
 # tunnel port 30022 on discovery back to this hosts's ssh port
 
