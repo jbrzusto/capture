@@ -67,7 +67,7 @@ namespace po = boost::program_options;
 #define MAX_N_SAMPLES 16384
 #define PULSES_PER_TRANSACTION 100
 
-static void do_capture (capture_db * cap, unsigned short n_samples, unsigned n_pulses, const std::string & interface, const std::string & port);
+static void do_capture (capture_db * cap, capture_db * latest, unsigned short n_samples, unsigned n_pulses, const std::string & interface, const std::string & port);
 
 double now() {
   static struct timespec ts;
@@ -76,6 +76,7 @@ double now() {
 };
 
 static capture_db * cap = 0;
+static capture_db * latest = 0;
 
 void die(int sig) {
   if (cap)
@@ -183,9 +184,17 @@ int main(int argc, char *argv[])
 
   cap = new capture_db(filename);
 
+  latest = new capture_db("ramfs/latest.sqlite", 5);
+
   // assume short-pulse mode for Bridgemaster E
 
   cap->set_radar_mode( 25e3, // pulse power, watts
+                        50, // pulse length, nanoseconds
+                      1800, // pulse repetition frequency, Hz
+                        28  // antenna rotation rate, RPM
+                      );
+
+  latest->set_radar_mode( 25e3, // pulse power, watts
                         50, // pulse length, nanoseconds
                       1800, // pulse repetition frequency, Hz
                         28  // antenna rotation rate, RPM
@@ -198,15 +207,26 @@ int main(int argc, char *argv[])
                           n_samples  // samples per pulse
                          );
 
+  latest->set_digitize_mode( 125e6 / decim, // digitizing rate, Hz
+                         16,   // only uses lowest 14 bits when decim == 1 or decim > 4
+                          ((decim <= 4) ? decim : 1 ) * (1<<14 - 1), // scale: max sample value possible
+                          n_samples  // samples per pulse
+                         );
+
   cap->set_retain_mode ("full"); // keep all samples from all pulses
+  latest->set_retain_mode ("full"); // keep all samples from all pulses
 
   double ts = now();
   cap->record_geo(ts, 
               45.371357, -64.402784, 30, // lat, lon, alt of FORCE VC radar site
               136.8); // heading offset, in degrees clockwise from north, for radar at FORCE VC
 
+  latest->record_geo(ts, 
+              45.371357, -64.402784, 30, // lat, lon, alt of FORCE VC radar site
+              136.8); // heading offset, in degrees clockwise from north, for radar at FORCE VC
+
   try {
-    do_capture (cap, n_samples, n_pulses, interface, port);
+    do_capture (cap, latest, n_samples, n_pulses, interface, port);
   } catch (std::runtime_error e)
     {
     };
@@ -223,7 +243,7 @@ run_reader(void * tcpr) {
 };
 
 static void
-do_capture  (capture_db * cap, unsigned short n_samples, unsigned n_pulses, const std::string &interface, const std::string &port)
+do_capture  (capture_db * cap, capture_db * latest, unsigned short n_samples, unsigned n_pulses, const std::string &interface, const std::string &port)
 {
 #ifdef DEBUG
   int pulse_count = 0;
@@ -279,6 +299,16 @@ do_capture  (capture_db * cap, unsigned short n_samples, unsigned n_pulses, cons
                        0, // constant 0 elevation angle for FORCE radar
                        0, // constant polarization for FORCE radar
                        (uint16_t *) & pulsebuf[sizeof(pulse_metadata) - sizeof(uint16_t)]);
+
+    latest->record_pulse (ts,
+                       meta->num_trig,
+                       meta->trig_clock,
+                       meta->acp_clock,
+                       meta->num_arp,
+                       0, // constant 0 elevation angle for FORCE radar
+                       0, // constant polarization for FORCE radar
+                       (uint16_t *) & pulsebuf[sizeof(pulse_metadata) - sizeof(uint16_t)]);
+
 #ifdef DEBUG
     if (++pulse_count == 500) {
       pulse_count = 0;

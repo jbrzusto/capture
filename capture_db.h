@@ -26,7 +26,7 @@ class capture_db {
   enum {FORMAT_PACKED_FLAG = 512};
 
   //!< constructor which opens a connection to the SQLITE file
-  capture_db (std::string filename);
+  capture_db (std::string filename, int maxSweeps=0);
 
   //!< destructor which closes connection to the SQLITE file
   ~capture_db (); // close the database file
@@ -59,6 +59,9 @@ class capture_db {
   void record_param (double ts, std::string param, double val);
 
  protected:
+  int max_sweeps;   //!< if positive, maximum number of sweeps to store
+                   //! in this database; when full, incoming sweeps
+                   //! replace the oldest existing sweep.
   int mode;        //!< combined unique ID of all modes (radar, digitize, retain)
   int radar_mode; //!< unique ID of current radar mode (negative means not set)
   int digitize_mode; //!< unique ID of current digitize mode (negative means not set)
@@ -72,9 +75,11 @@ class capture_db {
 
   uint32_t last_num_arp; //!< ARP count from previous pulse; a change here means we're on a new sweep
   long long int sweep_count; //!< sweep count
+  long long int sweeps_in_db; //!< sweep count (in database; can go down when a sweep is deleted for case max_sweeps > 0)
 
   sqlite3 * db; //<! handle to sqlite connection
   sqlite3_stmt * st_record_pulse; //!< pre-compiled statement for recording raw pulses
+  sqlite3_stmt * st_delete_oldest_sweep; //!< pre-compiled statement for deleting oldest sweep
 
   int commits_per_checkpoint; //!< how many commits before we manually do a wal checkpoint
   int commit_count; //!< counter for commits to allow appropriate checkpointing
