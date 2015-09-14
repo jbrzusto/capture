@@ -225,6 +225,10 @@ run_reader(void * tcpr) {
 static void
 do_capture  (capture_db * cap, unsigned short n_samples, unsigned n_pulses, const std::string &interface, const std::string &port)
 {
+#ifdef DEBUG
+  int pulse_count = 0;
+#endif
+
   uint16_t psize = sizeof(pulse_metadata) + sizeof(uint16_t) * (n_samples - 1);
 
   bool okay = true;
@@ -275,7 +279,14 @@ do_capture  (capture_db * cap, unsigned short n_samples, unsigned n_pulses, cons
                        0, // constant 0 elevation angle for FORCE radar
                        0, // constant polarization for FORCE radar
                        (uint16_t *) & pulsebuf[sizeof(pulse_metadata) - sizeof(uint16_t)]);
-    //    std::cerr << "Wrote pulses to database: " << pc << "\n";
+#ifdef DEBUG
+    if (++pulse_count == 500) {
+      pulse_count = 0;
+      int reader_index, writer_index;
+      srb.get_indices(reader_index, writer_index);
+      std::cerr << "Read index: " << reader_index << ";  Writer index: " << writer_index << "; diff: " << (writer_index - reader_index) % n_pulses;
+    }
+#endif
     srb.done_reading_chunk();
   }
 }

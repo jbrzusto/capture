@@ -138,3 +138,10 @@ bool
 shared_ring_buffer::is_done_reading_chunk() {
   return chunk_read_complete;
 };
+
+void
+shared_ring_buffer::get_indices(int & reader_index, int & writer_index) {
+  reader_index = reader_chunk_index;
+  writer_index = writer_chunk_index;
+  return;
+};

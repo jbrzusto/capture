@@ -1,6 +1,6 @@
 # simple makefile to just get things working under linux
 
-CPPOPTS=-std=c++11 -fPIC -O3 -fomit-frame-pointer
+CPPOPTS=-std=c++11 -fPIC -O3 -fomit-frame-pointer -DDEBUG
 COPTS=-fPIC -O3 -fomit-frame-pointer
 # CPPOPTS=-std=c++11  -fPIC -g3
 # COPTS= -fPIC -g3

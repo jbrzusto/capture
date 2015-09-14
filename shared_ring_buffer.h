@@ -60,6 +60,9 @@ class shared_ring_buffer {
   //! return size of chunks, in bytes
   const int get_chunk_size ();
 
+  //! get current reader/writer indices
+  void get_indices(int & reader_index, int & writer_index);
+
  protected:
   //! size of each chunk, in bytes
   int chunk_size;
