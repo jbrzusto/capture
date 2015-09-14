@@ -284,7 +284,7 @@ do_capture  (capture_db * cap, unsigned short n_samples, unsigned n_pulses, cons
       pulse_count = 0;
       int reader_index, writer_index;
       srb.get_indices(reader_index, writer_index);
-      std::cerr << "Read index: " << reader_index << ";  Writer index: " << writer_index << "; diff: " << (writer_index - reader_index) % n_pulses << std::endl;
+      std::cerr << "Read index: " << reader_index << ";  Writer index: " << writer_index << "; npulses: " << n_pulses << "; diff: " << ((writer_index - reader_index) % n_pulses) << std::endl;
     }
 #endif
     srb.done_reading_chunk();
