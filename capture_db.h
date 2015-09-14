@@ -58,18 +58,7 @@ class capture_db {
   //!< record a parameter setting
   void record_param (double ts, std::string param, double val);
 
-  //!< set the number of pulses per transaction; caller is guaranteeing
-  //!< data for this many consecutive pulses is effectively static
-  //!< so that sqlite need not make a private copy before commiting the
-  //!< INSERT transaction.
-  void set_pulses_per_transaction(int pulses_per_transaction);
-
-  //!< get the number of pulses per transaction
-  int get_pulses_per_transaction();
-
  protected:
-  int pulses_per_transaction; //!< number of pulses to write to database per transaction
-  int pulses_written_this_trans; //!< number of pulses written to database for current transaction
   int mode;        //!< combined unique ID of all modes (radar, digitize, retain)
   int radar_mode; //!< unique ID of current radar mode (negative means not set)
   int digitize_mode; //!< unique ID of current digitize mode (negative means not set)
@@ -87,7 +76,7 @@ class capture_db {
   sqlite3 * db; //<! handle to sqlite connection
   sqlite3_stmt * st_record_pulse; //!< pre-compiled statement for recording raw pulses
 
-  int commits_per_checkpoint; //!< how many commits before we manually to a wal checkpoint
+  int commits_per_checkpoint; //!< how many commits before we manually do a wal checkpoint
   int commit_count; //!< counter for commits to allow appropriate checkpointing
 
   //!< update overall mode, given a component mode (radar, digitize, retain) has changed

@@ -20,13 +20,12 @@
 #include <unistd.h>
 
 capture_db::capture_db (std::string filename) :
-  pulses_per_transaction(512),
   radar_mode (-1),
   digitize_mode (-1),
   last_num_arp(0xffffffff), // start at large value, so first pulse begins a new sweep
   sweep_count(0),
   st_record_pulse(0),
-  commits_per_checkpoint(5),
+  commits_per_checkpoint(1),
   commit_count(0)
 {
   if (SQLITE_OK != sqlite3_open_v2(filename.c_str(),
@@ -220,12 +219,19 @@ capture_db::record_pulse (double ts, uint32_t trigs, uint32_t trig_clock, float 
                      -1, & st_record_pulse, 0);
 
     sqlite3_exec (db, "begin transaction", 0, 0, 0);
-    pulses_written_this_trans = 0;
   }
   
   if (num_arp != last_num_arp) {
     ++sweep_count;
     last_num_arp = num_arp;
+    sqlite3_exec (db, "commit", 0, 0, 0);
+    sqlite3_finalize (st_record_pulse);
+    st_record_pulse = 0;
+    if (++commit_count >= commits_per_checkpoint) {
+      commit_count = 0;
+      // wal checkpoint after commit, to avoid this happening in one large chunk
+      sqlite3_wal_checkpoint (db, 0);
+    }
     // DEBUGGING:    std::cerr << "first pulse of new sweep: ts = " << std::setprecision(14) << ts << std::setprecision(3) << "; n_ACPs = " << n_ACPs << "; azi = " << azi << std::endl;
   }
   
@@ -244,19 +250,6 @@ capture_db::record_pulse (double ts, uint32_t trigs, uint32_t trig_clock, float 
     // FIXME: figure out which bytes to copy
   }
   sqlite3_step (st_record_pulse);
-
-  ++pulses_written_this_trans;
-  if (pulses_written_this_trans == pulses_per_transaction) {
-    
-    sqlite3_exec (db, "commit", 0, 0, 0);
-    sqlite3_finalize (st_record_pulse);
-    st_record_pulse = 0;
-    if (++commit_count >= commits_per_checkpoint) {
-      commit_count = 0;
-      // wal checkpoint after commit, to avoid this happening in one large chunk
-      sqlite3_wal_checkpoint (db, 0);
-    }
-  }
 };
 
 void
@@ -314,16 +307,6 @@ capture_db::record_param (double ts, std::string param, double val) {
   sqlite3_bind_double (st, 3, val);
   sqlite3_step (st);
   sqlite3_finalize (st);
-};
-
-void
-capture_db::set_pulses_per_transaction (int pulses_per_transaction) {
-  this->pulses_per_transaction = pulses_per_transaction;
-};
-
-int
-capture_db::get_pulses_per_transaction () {
-  return pulses_per_transaction;
 };
 
 

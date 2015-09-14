@@ -200,8 +200,6 @@ int main(int argc, char *argv[])
 
   cap->set_retain_mode ("full"); // keep all samples from all pulses
 
-  cap->set_pulses_per_transaction (PULSES_PER_TRANSACTION); // commit to keeping data for at least PULSES_PER_TRANSACTION pulses
-
   double ts = now();
   cap->record_geo(ts, 
               45.371357, -64.402784, 30, // lat, lon, alt of FORCE VC radar site
