@@ -27,6 +27,7 @@ capture_db::capture_db (std::string filename, int max_sweeps) :
   sweep_count(0),
   sweeps_in_db(0),
   st_record_pulse(0),
+  st_delete_oldest_sweep(0),
   commits_per_checkpoint(1),
   commit_count(0)
 {
@@ -232,7 +233,9 @@ capture_db::record_pulse (double ts, uint32_t trigs, uint32_t trig_clock, float 
     if (max_sweeps > 0) {
       if (sweeps_in_db == max_sweeps) {
         if (! st_delete_oldest_sweep) {
-          sqlite3_prepare_v2(db, "delete from pulses where sweep_key = ?", -1, & st_delete_oldest_sweep, 0);
+          if (! SQLITE_OK == sqlite3_prepare_v2(db, "delete from pulses where sweep_key = ?", -1, & st_delete_oldest_sweep, 0)) {
+            throw std::runtime_error(std::string("Unable to prepare delete statement for limited-size capture db"));
+          }
         }
         sqlite3_bind_int ( st_delete_oldest_sweep, 1, sweep_count - max_sweeps + 1 );
         sqlite3_step (st_delete_oldest_sweep );
