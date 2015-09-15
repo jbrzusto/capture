@@ -56,6 +56,7 @@
 #include <signal.h>
 #include <boost/program_options.hpp>
 #include "capture_db.h"
+#include "sweep_file_writer.h"
 #include "pulse_metadata.h"
 #include "shared_ring_buffer.h"
 #include "tcp_reader.h"
@@ -75,8 +76,7 @@ double now() {
   return ts.tv_sec + ts.tv_nsec / 1.0e9;
 };
 
-static capture_db * cap = 0;
-static capture_db * latest = 0;
+static sweep_file_writer * cap = 0;
 
 void die(int sig) {
   if (cap)
@@ -103,11 +103,12 @@ int main(int argc, char *argv[])
   unsigned short	n_samples	   = 3000;	// set the number of samples per pulse
   unsigned      	n_pulses	   = 6000;	// set the number of pulses to buffer from network
 
-  std::string		filename	   = "capture_data.sqlite";
+  std::string		site	           = "FORCEVC";
+  std::string           folder             = ".";
   std::string           port               = "12345";
   std::string           interface          = "0.0.0.0";
   int                   quiet              = false;     // don't output diagnostics to stdout
-  po::options_description	cmdconfig("Usage: rpcapture [options] [filename]");
+  po::options_description	cmdconfig("Usage: rpcapture [options] [folder]");
 
   cmdconfig.add_options()
     ("help,h", "produce help message")
@@ -117,16 +118,16 @@ int main(int argc, char *argv[])
     ("quiet,q", "don't output diagnostics")
     ("realtime,T", "try to request realtime priority for process")
     ("port,P", po::value<std::string>(&port), "listen for incoming data on tcp port PORT; default is 12345")
+    ("site,s", po::value<std::string>(&site), "set short site code used in filenames; default is FORCEVC")
     ("interface,i", po::value<std::string>(&interface), "bind listen port on this interface; default is all interfaces (0.0.0.0)")
     ;
 
   po::options_description fileconfig("Input file options");
   fileconfig.add_options()
-    ("filename", po::value<std::string>(), "output file")
+    ("folder", po::value<std::string>(), "top-level output folder")
     ;
-
-  po::positional_options_description inputfile;
-  inputfile.add("filename", -1);
+  po::positional_options_description folder;
+  folder.add("folder", -1);
 
   po::options_description config;
   config.add(cmdconfig).add(fileconfig);
