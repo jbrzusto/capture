@@ -170,7 +170,9 @@ fi
 # Listen on port PORT for raw pulse data from the redpitaya digitizer, and pipe this into
 # the capture process. 
 
-/home/radar/capture/rpcapture -p 15000 -P $PORT -d $DECIM -n $NUMSAMP -T $DATADIR/$OUTFILE &
+/home/radar/capture/rpcapture -p 15000 -P $PORT -d $DECIM -n $NUMSAMP -T $DATADIR/$OUTFILE 2>/tmp/rpcapturelog.txt &
+
+sleep 2
 
 # set the red pitaya's RTC.  FIXME: we should be running ntpd or chrony
 # on there instead!  Precision here is 1s.
@@ -180,7 +182,6 @@ ssh -o ControlMaster=no -o ControlPath=none root@$DIGDARHOST date `date "+%m%d%H
 # start the digdar digitizing process on the redpitaya
 ssh -o ControlMaster=no -o ControlPath=none -f -n root@$DIGDARHOST "/opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNKSIZE $USE_SUM $REMOVE -t $LOCALHOST:$PORT &"
 
-sleep 10
 
 # start generating and pushing live images
 /home/radar/capture/pushLiveImages.R --dbdir $DATADIR --samples $NUMSAMP --sampling_rate 125e6 --decim $DECIM $REMOVE > $DATADIR/$LOGFILE 2>&1 &

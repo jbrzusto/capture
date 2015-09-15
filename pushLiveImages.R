@@ -151,12 +151,8 @@ if (is.null(removal)) {
 
 pulsesPerSweep = length(desiredAzi)
 
-## Get all database filenames 
-
-dbFiles = dir(dbDir, pattern="^FORCEVC_raw.*\\.sqlite$", full.names=TRUE)
-
 ## choose the most recent one
-dbFile = dbFiles[order(file.info(dbFiles)$mtime, decreasing=TRUE)[1]]
+dbFile = "/home/radar/capture/ramfs/latest.sqlite"
 
 dyn.load("/home/radar/capture/capture_lib.so") 
 library(RSQLite)
@@ -171,18 +167,9 @@ class(pix)="nativeRaster"
 attr(pix, "channels") = 4
 
 scanConv = NULL
-last.sk = -1
+sk = 0
 
 pal = readRDS("/home/radar/capture/radarImagePalette.rds")  ## low-overhead read of palette, to allow changing dynamically
-
-while (TRUE) {
-  gc(verbose=FALSE)
-  Sys.sleep(0.1)
-  ## see how far the pulse capturing has gone.
-  ## For now, we look for the latest complete sweep.  For later, we'll generate images chunk by chunk (e.g. quadrant
-  ## by quadrant) for finer-grained screen update.  The trick is not to query too close to the leading
-  ## edge of data, as this can cause indefinite growth in the size of the sqlite write-ahead-log file and/or
-  ## cache file(s).
 
   con = NULL
   while (is.null(con)) {
@@ -191,47 +178,39 @@ while (TRUE) {
               con = dbConnect(RSQLite::SQLite(), dbFile)
           },
           error = function(e) {
-              Sys.sleep(1)
+              Sys.sleep(0.2)
           }
           )
   }
+
+while (TRUE) {
+  gc(verbose=FALSE)
+  Sys.sleep(0.1)
+  # see how far the pulse capturing has gone.
+  ## For now, we look for the latest complete sweep.  For later, we'll generate images chunk by chunk (e.g. quadrant
+  ## by quadrant) for finer-grained screen update.  The trick is not to query too close to the leading
+  ## edge of data, as this can cause indefinite growth in the size of the sqlite write-ahead-log file and/or
+  ## cache file(s).
+
 
 ##  ts = .Call("get_latest_pulse_timestamp") ## this is an atomic read from semaphore-protected shared memory
 
   ## get the key for the sweep before the one being filled now
-  sk = NULL
-  while (is.null(sk)) {
-      tryCatch (
-          {
-              sk = dbGetQuery(con, sprintf("select distinct sweep_key from pulses order by sweep_key desc limit 2", ts))[2, 1]
-          },
-          error = function(e) {
-              Sys.sleep(0.1)
-          }
-          )
-  }
-  
-  
-  if (! isTRUE(sk != last.sk && sk > 0))
-    next
-  
-  last.sk = sk
-
-  ## get all pulses for this sweep
+  got = FALSE
   x = NULL
-
-  while (is.null(x)) {
+  while (! got || is.null(x) || nrow(x) == 0) {
+      Sys.sleep(0.2)
       tryCatch (
           {
-              x = dbGetQuery(con, sprintf("select * from pulses where sweep_key = %d order by ts", sk))
+              x = dbGetQuery(con, sprintf("select * from pulses where sweep_key = max(%d, (select min(sweep_key) from pulses)) order by ts", 1 + sk))
+              got = TRUE
           },
           error = function(e) {
-              Sys.sleep(0.1)
           }
           )
   }
-  dbDisconnect(con)
-  
+##  dbDisconnect(con)
+  sk = x$sweep_key[1]
 
   options(digits=14)
 

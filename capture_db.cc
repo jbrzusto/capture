@@ -39,10 +39,13 @@ capture_db::capture_db (std::string filename, int max_sweeps) :
 
   sqlite3_exec(db, "pragma synchronous=1;", 0, 0, 0);
   sqlite3_exec(db, "pragma page_size=65536;", 0, 0, 0);
-  sqlite3_exec(db, "pragma journal_mode=delete;", 0, 0, 0);
-  /*
-  sqlite3_exec(db, "pragma wal_autocheckpoint=0;", 0, 0, 0);
-  */
+  sqlite3_exec(db, "pragma journal_size_limit=320000000;", 0, 0, 0); // 32 megabytes
+  if (max_sweeps > 0) {
+    sqlite3_exec(db, "pragma journal_mode=wal;", 0, 0, 0);
+    sqlite3_exec(db, "pragma wal_autocheckpoint=200;", 0, 0, 0);
+  } else {
+    sqlite3_exec(db, "pragma journal_mode=delete;", 0, 0, 0);
+  }
   sqlite3_exec(db, "pragma cache_size=5000;", 0, 0, 0);
 
   ensure_tables();
@@ -231,14 +234,24 @@ capture_db::record_pulse (double ts, uint32_t trigs, uint32_t trig_clock, float 
     last_num_arp = num_arp;
     sqlite3_exec (db, "commit", 0, 0, 0);
     if (max_sweeps > 0) {
-      if (sweeps_in_db == max_sweeps) {
+      if (sweeps_in_db == max_sweeps + 1) {
         if (! st_delete_oldest_sweep) {
-          if (! SQLITE_OK == sqlite3_prepare_v2(db, "delete from pulses where sweep_key = ?", -1, & st_delete_oldest_sweep, 0)) {
+          if (! SQLITE_OK == sqlite3_prepare_v2(db, "delete from pulses where sweep_key <= ?", -1, & st_delete_oldest_sweep, 0)) {
             throw std::runtime_error(std::string("Unable to prepare delete statement for limited-size capture db"));
           }
         }
-        sqlite3_bind_int ( st_delete_oldest_sweep, 1, sweep_count - max_sweeps + 1 );
-        sqlite3_step (st_delete_oldest_sweep );
+        sqlite3_bind_int ( st_delete_oldest_sweep, 1, sweep_count - max_sweeps);
+        for (;;) {
+          int rv = sqlite3_step (st_delete_oldest_sweep );
+          if (rv == SQLITE_DONE)
+            break;
+          if (rv == SQLITE_LOCKED || rv == SQLITE_BUSY) {
+            usleep(50000); // sleep 50 ms before retrying
+            continue;
+          }
+          std::cerr << "Unable to delete oldest sweep from ramfs database; sweep_key = " << (sweep_count - max_sweeps) << "; error = " << rv << std::endl;
+          throw std::runtime_error(std::string("Failed to maintain limited databse size"));
+        }         
         sqlite3_reset (st_delete_oldest_sweep);
       } else {
         ++ sweeps_in_db;
