@@ -12,7 +12,8 @@
 
 #pragma once
 #include <string>
-#include <sqlite3.h>
+#include <ostream>
+#include <fstream>
 
 #include <time.h>
 #include <stdint.h>
@@ -58,7 +59,7 @@ class sweep_file_writer {
   static const char * const VERSION;
 
   //!< constructor
-  sweep_file_writer (std::string folder, std::string site, int max_pulses, int samples, 
+  sweep_file_writer (std::string folder, std::string site, std::string logfile, int max_pulses, int samples, 
                      int fmt, double range0, double clock, int decim, std::string mode );
 
   //!< destructor; save accumulated sweep to file
@@ -73,6 +74,8 @@ class sweep_file_writer {
 
   std::string folder; //!< path to top-level folder
   std::string site;   //!< name of site
+  std::string logfile; //!< name of file to log full paths of sweep files written, one per line
+
   int max_pulses; //!< max number of pulses in a sweep
   int samples; //!< samples per pulse
   int fmt; //!< sample format: lowest 8 bits is bits per sample; higher bits are flags (none so far)
@@ -80,7 +83,6 @@ class sweep_file_writer {
   double clock; //!< sampling clock rate, in MHz
   int decim; //!< clock samples per file sample
   std::string mode; //!< how clock samples are converted to files sample; eg. "first", "sum", "mean"
-
   int np; //!< number of pulses in this sweep so far.
   int nARP; //!< ARP count of currently accumulating sweep; -1 means no sweep so far
   double ts0; //!< timestamp at first pulse
@@ -88,6 +90,7 @@ class sweep_file_writer {
   float    * azi_buf;    //!< buffer of azimuth values for each pulse
   uint32_t * trig_buf;  //!< buffer of trigger pulse counts for each pulse
   uint16_t * sample_buf; //!< buffer of all samples for all pulses
+  std::ofstream * logfs; //!< filestream for logging sweep files names
 
   int write_file(); //!< write accumulated pulses to appropriate file, and clear buffers, returning 0 on success
 

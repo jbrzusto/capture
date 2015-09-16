@@ -1,4 +1,4 @@
-#!/usr/bin/R -f
+#!/usr/bin/Rscript
 
 ## pushLiveImages.R: generate an image for each sweep of committed data and push
 ## it to the webserver.
@@ -16,13 +16,8 @@
 
 tmpDir = "/tmp"
 
-## Overlay Image dimensions: we generate a square image, this many pixels
-##   on a side.
-
-imageSize = 1024L
-
 ## desired pixels per metre
-ppm = 1.0 / 7.5
+ppm = 1.0 / 30
 
 ## Azimuth and Range Offsets: if the heading pulse is flaky, azimuth offset must
 ## be used to set the orientation - in radians.  This can be changed
@@ -51,6 +46,10 @@ while (length(argv) > 0) {
     switch (argv[1],
             "--remove" = {
                 removal = as.numeric(strsplit(argv[2], ":")[[1]])
+                argv = argv[-(1:2)]
+            },
+            "--filelist" = {
+                filelist = argv[2]
                 argv = argv[-(1:2)]
             },
             {
@@ -108,15 +107,18 @@ sk = 0
 
 pal = readRDS("/home/radar/capture/radarImagePalette.rds")  ## low-overhead read of palette, to allow changing dynamically
 options(digits=14)
-fcon = file("/dev/stdin", "r")
+while (! file.exists(filelist) ) {
+    Sys.sleep(0.2)
+}
+
+fcon = file(filelist, "r")
 
 while (TRUE) {
-  gc(verbose=FALSE)
+  seek(fcon, where=seek(fcon, rw="r"), rw="R")
   f = readLines(fcon, n=1)
 ## e.g.  f="/media/FORCEradar9/2015-09-16/06/FORCEVC-2015-09-16T06-05-50.979752.dat"
   if (length(f) == 0 || ! isTRUE(file.exists(f))) {
-      cat("Skipping missing file ", f, "\n")
-      Sys.sleep(0.1)
+      Sys.sleep(0.05)
       next
   }
   con = file(f, "rb")
@@ -179,6 +181,6 @@ while (TRUE) {
   ## is done atomically, so that if the web server process is serving
   ## the file, it serves either the complete previous image, or the
   ## complete new image, rather than a partial or corrupt image.
-  system(sprintf("scp -q %s/currentFORCERadarImage.png %s/FORCERadarSweepMetadata.txt %s:%s; ssh %s '%s'", tmpDir, tmpDir, scpDestUser, scpDestDir, scpDestUser, archiveScript))
+  system(sprintf("scp -q %s/currentFORCERadarImage.png %s/FORCERadarSweepMetadata.txt %s:%s; ssh %s '%s'", tmpDir, tmpDir, scpDestUser, scpDestDir, scpDestUser, archiveScript), wait=FALSE)
 }
 

@@ -105,6 +105,7 @@ int main(int argc, char *argv[])
   std::string           folder             = ".";
   std::string           port               = "12345";
   std::string           interface          = "0.0.0.0";
+  std::string           logfile            = "/dev/null";
   int                   quiet              = false;     // don't output diagnostics to stdout
   po::options_description	cmdconfig("Usage: rpcapture [options] [folder]");
 
@@ -118,6 +119,7 @@ int main(int argc, char *argv[])
     ("port,P", po::value<std::string>(&port), "listen for incoming data on tcp port PORT; default is 12345")
     ("site,s", po::value<std::string>(&site), "set short site code used in filenames; default is FORCEVC")
     ("interface,i", po::value<std::string>(&interface), "bind listen port on this interface; default is all interfaces (0.0.0.0)")
+    ("logfile,L", po::value<std::string>(&logfile), "record full path to each file written in this file; default is none")
     ;
 
   po::options_description fileconfig("Output folder options");
@@ -152,6 +154,9 @@ int main(int argc, char *argv[])
   if (vm.count("site"))
     site = vm["site"].as<std::string>();
 
+  if (vm.count("logfile"))
+    logfile = vm["logfile"].as<std::string>();
+
   if (vm.count("folder")) {
     folder = vm["folder"].as<std::string>();
   }
@@ -184,7 +189,7 @@ int main(int argc, char *argv[])
   if (vm.count("decim"))
     decim = vm["decim"].as<unsigned int>();
 
-  cap = new sweep_file_writer(folder, site, max_pulses, n_samples, 16, 0, 125, decim, decim <= 4 ? "sum" : "first");
+  cap = new sweep_file_writer(folder, site, logfile, max_pulses, n_samples, 16, 0, 125, decim, decim <= 4 ? "sum" : "first");
 
   // FIXME: add this capability
   // cap->addParam( "power", 25.0e3 );

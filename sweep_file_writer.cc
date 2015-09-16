@@ -14,10 +14,11 @@
 #include <boost/filesystem.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 
-sweep_file_writer::sweep_file_writer (std::string folder, std::string site, int max_pulses, int samples, 
+sweep_file_writer::sweep_file_writer (std::string folder, std::string site, std::string logfile, int max_pulses, int samples, 
                                       int fmt, double range0, double clock, int decim, std::string mode ) : 
   folder(folder),
   site(site),
+  logfile(logfile),
   max_pulses(max_pulses),
   samples(samples),
   fmt(fmt),
@@ -32,6 +33,7 @@ sweep_file_writer::sweep_file_writer (std::string folder, std::string site, int 
   trig_buf = new uint32_t[max_pulses];
   azi_buf = new float[max_pulses];
   sample_buf = new uint16_t[max_pulses * samples];
+  logfs = new std::ofstream(logfile);
 }
 
 
@@ -39,6 +41,7 @@ sweep_file_writer::sweep_file_writer (std::string folder, std::string site, int 
 sweep_file_writer::~sweep_file_writer ()
 {
   write_file();
+  delete logfs;
   delete [] sample_buf;
   delete [] trig_buf;
   delete [] azi_buf;
@@ -128,8 +131,8 @@ sweep_file_writer::write_file() {
   fwrite(sample_buf, sizeof(sample_buf[0]), np * samples, f);
   fclose(f);
 
-  // report file written to stdout
-  std::cout << p.string() << std::endl;
+  // report file written to logfile
+  (*logfs) << p.string() << std::endl << std::flush;
 
   // mark buffers as empty
   np = 0;

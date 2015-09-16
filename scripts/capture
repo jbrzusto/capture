@@ -164,13 +164,8 @@ fi
 # Listen on port PORT for raw pulse data from the redpitaya digitizer, record it as sweep files
 # and upload raw images from these.
 
-CMD="/home/radar/capture/rpcapture -p $PULSES -P $PORT -d $DECIM -n $NUMSAMP -T $DATADIR 2>/tmp/rpcapturelog.txt | \n /home/radar/capture/pushLiveImages.R $REMOVE > $DATADIR/$LOGFILE 2>&1 "
-
-echo Will run $CMD
-( 
-   /home/radar/capture/rpcapture -p $PULSES -P $PORT -d $DECIM -n $NUMSAMP -T $DATADIR 2>/tmp/rpcapturelog.txt | \
-   R -f /home/radar/capture/pushLiveImages.R $REMOVE > $DATADIR/$LOGFILE 2>&1 
-) &
+/home/radar/capture/rpcapture -p $PULSES -P $PORT -d $DECIM -n $NUMSAMP -T $DATADIR -L /tmp/rpcapturefilelist.txt 2>/tmp/rpcapturelog.txt &
+/home/radar/capture/pushLiveImages.R $REMOVE --filelist /tmp/rpcapturefilelist.txt > $DATADIR/$LOGFILE 2>&1 &
 
 sleep 3
 
@@ -183,6 +178,6 @@ sshpass -p root ssh -o ControlMaster=no -o ControlPath=none root@$DIGDARHOST dat
 # start the digdar digitizing process on the redpitaya
 
 echo On redpitaya, will do /opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNK_SIZE $USE_SUM $REMOVE -t $LOCALHOST:$PORT 
-sshpass -p root ssh -o ControlMaster=no -o ControlPath=none -f -n root@$DIGDARHOST "/opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNK_SIZE $USE_SUM $REMOVE -t $LOCALHOST:$PORT &"
+sshpass -p root ssh -o ControlMaster=no -o ControlPath=none -f -n root@$DIGDARHOST "/opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNK_SIZE $USE_SUM $REMOVE -t $LOCALHOST:$PORT 2>/tmp/digdarlog.txt&"
 
 
