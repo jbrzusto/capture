@@ -6,7 +6,7 @@ CPPOPTS=-std=c++11 -fPIC -O3 -fomit-frame-pointer
 COPTS=-fPIC -O3 -fomit-frame-pointer
 USRP_INCLUDE=-I/home/radar/gnuradio/usrp/host/include -I/home/radar/gnuradio/usrp/firmware/include
 USRP_LIBS=-L/home/radar/gnuradio/usrp/host/lib -lusrp
-LIBS=-lpthread -lrt -lboost_program_options -lboost_thread -lsqlite3
+LIBS=-lpthread -lrt -lboost_program_options -lboost_thread -lboost_filesystem -lboost_system
 
 all: capture test_capture_db
 
@@ -31,10 +31,13 @@ capture: capture.o capture_db.o
 shared_ring_buffer.o: shared_ring_buffer.cc shared_ring_buffer.h
 	g++ $(CPPOPTS) -o $@ -c shared_ring_buffer.cc
 
+sweep_file_writer.o: sweep_file_writer.cc sweep_file_writer.h
+	g++ $(CPPOPTS) -o $@ -c sweep_file_writer.cc
+
 tcp_reader.o: tcp_reader.cc tcp_reader.h
 	g++ $(CPPOPTS) -o $@ -c tcp_reader.cc
 
-rpcapture: rpcapture.o capture_db.o shared_ring_buffer.o tcp_reader.o
+rpcapture: rpcapture.o sweep_file_writer.o shared_ring_buffer.o tcp_reader.o
 	g++ $(COPTS) -o $@ $^ $(LIBS)
 
 scan_converter.o: scan_converter.h scan_converter.cc

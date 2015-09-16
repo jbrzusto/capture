@@ -98,7 +98,12 @@ sweep_file_writer::write_file() {
   FILE *f = fopen(p.string().c_str(), "wb");
 
   // put out two lines of text header
-  fputs("DIGDAR sweep file; version = 1.0\n", f);
+  fputs("DigDar sweep file; version = 1.0\n", f);
+  // fixme: add an arbitrary JSON property list using methods
+  // addParam(std::string, double)
+  // addParam(std::string, int)
+  // addParam(std::string, std::string)
+
   fprintf(f, "{\"np\":%d,\"ns\":%d,\"fmt\":%d,\"ts0\":%.6f,\"tsn\":%.6f,\"range0\":%.3f,\"clock\":%.6f,\"decim\":%d,\"mode\":\"%s\"}\n",
           np,
           samples,

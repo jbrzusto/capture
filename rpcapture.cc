@@ -55,7 +55,6 @@
 #include <math.h>
 #include <signal.h>
 #include <boost/program_options.hpp>
-#include "capture_db.h"
 #include "sweep_file_writer.h"
 #include "pulse_metadata.h"
 #include "shared_ring_buffer.h"
@@ -66,9 +65,8 @@ namespace po = boost::program_options;
 #include <sched.h>
 
 #define MAX_N_SAMPLES 16384
-#define PULSES_PER_TRANSACTION 100
 
-static void do_capture (capture_db * cap, capture_db * latest, unsigned short n_samples, unsigned n_pulses, const std::string & interface, const std::string & port);
+static void do_capture (sweep_file_writer * cap, unsigned short n_samples, unsigned max_pulses, const std::string & interface, const std::string & port);
 
 double now() {
   static struct timespec ts;
@@ -101,7 +99,7 @@ int main(int argc, char *argv[])
   unsigned int		decim		   = 1;	// decimation rate
 
   unsigned short	n_samples	   = 3000;	// set the number of samples per pulse
-  unsigned      	n_pulses	   = 6000;	// set the number of pulses to buffer from network
+  unsigned      	max_pulses	   = 4096;	// set the number of pulses to buffer from network
 
   std::string		site	           = "FORCEVC";
   std::string           folder             = ".";
@@ -114,7 +112,7 @@ int main(int argc, char *argv[])
     ("help,h", "produce help message")
     ("decim,d", po::value<unsigned int>(&decim), "set fgpa decimation rate (1, 2, 3, 4, 8, 1024, 8192, or 65536; default is 1)")
     ("n_samples,n", po::value<unsigned short>(&n_samples), "number of samples to collect per pulse; default is 512; max is 16384")
-    ("n_pulses,p", po::value<unsigned>(&n_pulses), "number of pulses to buffer from digitizer on network; default is 6000")
+    ("max_pulses,p", po::value<unsigned>(&max_pulses), "max pulses per sweep; default is 4096")
     ("quiet,q", "don't output diagnostics")
     ("realtime,T", "try to request realtime priority for process")
     ("port,P", po::value<std::string>(&port), "listen for incoming data on tcp port PORT; default is 12345")
@@ -122,19 +120,19 @@ int main(int argc, char *argv[])
     ("interface,i", po::value<std::string>(&interface), "bind listen port on this interface; default is all interfaces (0.0.0.0)")
     ;
 
-  po::options_description fileconfig("Input file options");
+  po::options_description fileconfig("Output folder options");
   fileconfig.add_options()
     ("folder", po::value<std::string>(), "top-level output folder")
     ;
-  po::positional_options_description folder;
-  folder.add("folder", -1);
+  po::positional_options_description folderconfig;
+  folderconfig.add("folder", -1);
 
   po::options_description config;
   config.add(cmdconfig).add(fileconfig);
   
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv).
-	    options(config).positional(inputfile).run(), vm);
+	    options(config).positional(folderconfig).run(), vm);
   po::notify(vm);
   
   if (vm.count("help")) {
@@ -151,8 +149,11 @@ int main(int argc, char *argv[])
   if (vm.count("port"))
     port = vm["port"].as<std::string>();
 
-  if (vm.count("filename")) {
-    filename = vm["filename"].as<std::string>();
+  if (vm.count("site"))
+    site = vm["site"].as<std::string>();
+
+  if (vm.count("folder")) {
+    folder = vm["folder"].as<std::string>();
   }
 
   if (vm.count("realtime")) {
@@ -177,57 +178,26 @@ int main(int argc, char *argv[])
   if (n_samples > MAX_N_SAMPLES)
     perror ("Too many samples requested; max is 16384");
 
-  if (vm.count("n_pulses"))
-    n_pulses = vm["n_pulses"].as<unsigned>();
+  if (vm.count("max_pulses"))
+    max_pulses = vm["max_pulses"].as<unsigned>();
 
   if (vm.count("decim"))
     decim = vm["decim"].as<unsigned int>();
 
-  cap = new capture_db(filename);
+  cap = new sweep_file_writer(folder, site, max_pulses, n_samples, 16, 0, 125, decim, decim <= 4 ? "sum" : "first");
 
-  latest = new capture_db("ramfs/latest.sqlite", 5);
-
-  // assume short-pulse mode for Bridgemaster E
-
-  cap->set_radar_mode( 25e3, // pulse power, watts
-                        50, // pulse length, nanoseconds
-                      1800, // pulse repetition frequency, Hz
-                        28  // antenna rotation rate, RPM
-                      );
-
-  latest->set_radar_mode( 25e3, // pulse power, watts
-                        50, // pulse length, nanoseconds
-                      1800, // pulse repetition frequency, Hz
-                        28  // antenna rotation rate, RPM
-                      );
-
-  // record digitizing mode
-  cap->set_digitize_mode( 125e6 / decim, // digitizing rate, Hz
-                         16,   // only uses lowest 14 bits when decim == 1 or decim > 4
-                          ((decim <= 4) ? decim : 1 ) * (1<<14 - 1), // scale: max sample value possible
-                          n_samples  // samples per pulse
-                         );
-
-  latest->set_digitize_mode( 125e6 / decim, // digitizing rate, Hz
-                         16,   // only uses lowest 14 bits when decim == 1 or decim > 4
-                          ((decim <= 4) ? decim : 1 ) * (1<<14 - 1), // scale: max sample value possible
-                          n_samples  // samples per pulse
-                         );
-
-  cap->set_retain_mode ("full"); // keep all samples from all pulses
-  latest->set_retain_mode ("full"); // keep all samples from all pulses
-
-  double ts = now();
-  cap->record_geo(ts, 
-              45.371357, -64.402784, 30, // lat, lon, alt of FORCE VC radar site
-              136.8); // heading offset, in degrees clockwise from north, for radar at FORCE VC
-
-  latest->record_geo(ts, 
-              45.371357, -64.402784, 30, // lat, lon, alt of FORCE VC radar site
-              136.8); // heading offset, in degrees clockwise from north, for radar at FORCE VC
+  // FIXME: add this capability
+  // cap->addParam( "power", 25.0e3 );
+  // cap->addParam( "PLEN", 50.0 );
+  // cap->addParam( "PRF", 1800.0 );
+  // cap->addParam( "RPM", 28.0 );
+  // cap->addParam( "Lat", 45.371357 );
+  // cap->addParam( "Lon", -64.402784 );
+  // cap->addParam( "Elev", 30 );
+  // cap->addParam( "Tide", 8 );
 
   try {
-    do_capture (cap, latest, n_samples, n_pulses, interface, port);
+    do_capture (cap, n_samples, max_pulses, interface, port);
   } catch (std::runtime_error e)
     {
     };
@@ -244,7 +214,7 @@ run_reader(void * tcpr) {
 };
 
 static void
-do_capture  (capture_db * cap, capture_db * latest, unsigned short n_samples, unsigned n_pulses, const std::string &interface, const std::string &port)
+do_capture  (sweep_file_writer * cap, unsigned short n_samples, unsigned max_pulses, const std::string &interface, const std::string &port)
 {
 #ifdef DEBUG
   int pulse_count = 0;
@@ -258,7 +228,7 @@ do_capture  (capture_db * cap, capture_db * latest, unsigned short n_samples, un
   uint32_t num_arp = 0;
   uint32_t num_acp_at_arp = 0;
 
-  shared_ring_buffer srb(psize, n_pulses);
+  shared_ring_buffer srb(psize, max_pulses * 3);
   tcp_reader tcpr(interface, port, &srb);
 
   pthread_t read_thread;
@@ -300,16 +270,6 @@ do_capture  (capture_db * cap, capture_db * latest, unsigned short n_samples, un
                        0, // constant 0 elevation angle for FORCE radar
                        0, // constant polarization for FORCE radar
                        (uint16_t *) & pulsebuf[sizeof(pulse_metadata) - sizeof(uint16_t)]);
-
-    latest->record_pulse (ts,
-                       meta->num_trig,
-                       meta->trig_clock,
-                       meta->acp_clock,
-                       meta->num_arp,
-                       0, // constant 0 elevation angle for FORCE radar
-                       0, // constant polarization for FORCE radar
-                       (uint16_t *) & pulsebuf[sizeof(pulse_metadata) - sizeof(uint16_t)]);
-
 #ifdef DEBUG
     if (++pulse_count == 500) {
       pulse_count = 0;
@@ -317,7 +277,7 @@ do_capture  (capture_db * cap, capture_db * latest, unsigned short n_samples, un
       srb.get_indices(reader_index, writer_index);
       diff = (writer_index - reader_index);
       if (diff < 0) 
-        diff += n_pulses;
+        diff += max_pulses;
       std::cerr << "Read index: " << reader_index << ";  Writer index: " << writer_index << "; diff: " << diff << std::endl;
     }
 #endif
