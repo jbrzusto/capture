@@ -36,7 +36,8 @@
         "range0": RANGE_SAMPLE_0,          // double: range of first sample, in metres
         "clock": DIGITIZING_CLOCK_RATE,    // double: rate of digitizing clock, in MHz
         "decim": DECIMATION_RATE,          // int: number of clock samples per file sample
-        "mode": "DECIMATION_MODE"          // string: "first", "mean", "sum"; how clock samples are converted to file sample
+        "mode": "DECIMATION_MODE",         // string: "first", "mean", "sum"; how clock samples are converted to file sample
+        "bytes": BYTES_OF_BINARY_DATA      // bytes of binary data following this JSON string and its terminating '\n'
       }\n
    Then follows blocks of items, each block having one item per pulse.
    clocks:  np x 32-bit int; number of digitizing clocks since ARP for this pulse
@@ -53,6 +54,8 @@
 
 class sweep_file_writer {
  public:
+
+  static const char * const VERSION;
 
   //!< constructor
   sweep_file_writer (std::string folder, std::string site, int max_pulses, int samples, 

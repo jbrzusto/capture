@@ -2,12 +2,12 @@
 
 # for extra debugging output, add option -DDEBUG
 
-CPPOPTS=-std=c++11 -fPIC -O3 -fomit-frame-pointer
-COPTS=-fPIC -O3 -fomit-frame-pointer
+CPPOPTS=-std=c++11 -fPIC -O3
+COPTS=-fPIC -O3
 
 # debug version
-CPPOPTS=-std=c++11 -fPIC -g3 -DDEBUG
-COPTS=-fPIC -g3
+## CPPOPTS=-std=c++11 -fPIC -g3 -DDEBUG
+## COPTS=-fPIC -g3
 
 USRP_INCLUDE=-I/home/radar/gnuradio/usrp/host/include -I/home/radar/gnuradio/usrp/firmware/include
 USRP_LIBS=-L/home/radar/gnuradio/usrp/host/lib -lusrp

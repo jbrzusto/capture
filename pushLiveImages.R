@@ -1,4 +1,4 @@
-#!/usr/bin/Rscript
+#!/usr/bin/R -f
 
 ## pushLiveImages.R: generate an image for each sweep of committed data and push
 ## it to the webserver.
@@ -14,34 +14,15 @@
 
 ## each option can be replaced by a value specified on the command line
 
-## Directory where the capture program stores its sqlite database files
-
-##dbDir = "/mnt/3tb/force_data"
-dbDir = "/media/FORCE_radar_1/"
 tmpDir = "/tmp"
-
-## Samples per pulse: set by the capture program script; at the full
-##   digitizing rate of 125 MHz, range per sample is 1.2 metres, so
-##   1664 samples takes us out to 3.6 km.  The capture program
-##   script sets the samplesPerPulse.
-
-#samplesPerPulse = 1664L
-samplesPerPulse = 2000L
-
-## Sampling Rate: base clock rate for samples.
-
-samplingRate = 125e6
-
-## Decimation rate: actual sample clock rate is obtained by
-## dividing samplingRate by decim.
-
-#decimation = 3
-decimation = 4
 
 ## Overlay Image dimensions: we generate a square image, this many pixels
 ##   on a side.
 
 imageSize = 1024L
+
+## desired pixels per metre
+ppm = 1.0 / 7.5
 
 ## Azimuth and Range Offsets: if the heading pulse is flaky, azimuth offset must
 ## be used to set the orientation - in radians.  This can be changed
@@ -51,10 +32,6 @@ imageSize = 1024L
 ## Increasing these values shifts the coverage to the NE.
 
 aziRangeOffsets = c(46.8,0,2200,500)
-
-## Azimuth offset file: allows live correction of azimuth angle.  This
-## is a temporary kludge!
-aziRangeOffsetsFile = "/home/radar/capture/aziRangeOffsets.txt"
 
 ## SCP Destination User / Host to which images are pushed via secure copy
 scpDestUser = "force-radar@discovery"
@@ -72,38 +49,6 @@ argv = commandArgs(TRUE)
 
 while (length(argv) > 0) {
     switch (argv[1],
-            "--dbdir" = {
-                dbDir = argv[2]
-                argv = argv[-(1:2)]
-            },
-            "--pulses" = {
-                pulsesPerSweep = as.numeric(argv[2])
-                argv = argv[-(1:2)]
-            },
-            "--samples" = {
-                samplesPerPulse = as.numeric(argv[2])
-                argv = argv[-(1:2)]
-            },
-            "--image_size" = {
-                imageSize = as.numeric(argv[2])
-                argv = argv[-(1:2)]
-            },
-            "--azi_offset" = {
-                aziRangeOffsets[1] = as.numeric(argv[2])
-                argv = argv[-(1:2)]
-            },
-            "--range_offset" = {
-                aziRangeOffsets[2] = as.numeric(argv[2])
-                argv = argv[-(1:2)]
-            },
-            "--sampling_rate" = {
-                samplingRate = as.numeric(argv[2])
-                argv = argv[-(1:2)]
-            },
-            "--decim" = {
-                decimation = as.numeric(argv[2])
-                argv = argv[-(1:2)]
-            },
             "--remove" = {
                 removal = as.numeric(strsplit(argv[2], ":")[[1]])
                 argv = argv[-(1:2)]
@@ -118,12 +63,6 @@ while (length(argv) > 0) {
 
 ##
 VELOCITY_OF_LIGHT = 2.99792458E8
-
-## metres per sample
-mps = VELOCITY_OF_LIGHT / (samplingRate / decimation) / 2.0
-
-## desired pixels per metre
-ppm = 1.0 / 7.5
 
 ## Desired image extents
 ##  xlim is east/west (negative = west)
@@ -151,16 +90,14 @@ if (is.null(removal)) {
 
 pulsesPerSweep = length(desiredAzi)
 
-## choose the most recent one
-dbFile = "/home/radar/capture/ramfs/latest.sqlite"
-
-dyn.load("/home/radar/capture/capture_lib.so") 
-library(RSQLite)
 ##library(jpeg)
 library(png)
+library(jsonlite)
+dyn.load("/home/radar/capture/capture_lib.so")
 
-## loop for a while, trying to connect; the db is initially locked by rpcapture
 
+## the capture process write its filenames to stdout,
+## and we read this from stdin
 
 pix = matrix(0L, iheight, iwidth)
 class(pix)="nativeRaster"
@@ -170,73 +107,65 @@ scanConv = NULL
 sk = 0
 
 pal = readRDS("/home/radar/capture/radarImagePalette.rds")  ## low-overhead read of palette, to allow changing dynamically
-
-  con = NULL
-  while (is.null(con)) {
-      tryCatch (
-          {
-              con = dbConnect(RSQLite::SQLite(), dbFile)
-          },
-          error = function(e) {
-              Sys.sleep(0.2)
-          }
-          )
-  }
+options(digits=14)
+fcon = file("/dev/stdin", "r")
 
 while (TRUE) {
   gc(verbose=FALSE)
-  Sys.sleep(0.1)
-  # see how far the pulse capturing has gone.
-  ## For now, we look for the latest complete sweep.  For later, we'll generate images chunk by chunk (e.g. quadrant
-  ## by quadrant) for finer-grained screen update.  The trick is not to query too close to the leading
-  ## edge of data, as this can cause indefinite growth in the size of the sqlite write-ahead-log file and/or
-  ## cache file(s).
-
-
-##  ts = .Call("get_latest_pulse_timestamp") ## this is an atomic read from semaphore-protected shared memory
-
-  ## get the key for the sweep before the one being filled now
-  got = FALSE
-  x = NULL
-  while (! got || is.null(x) || nrow(x) == 0) {
-      Sys.sleep(0.2)
-      tryCatch (
-          {
-              x = dbGetQuery(con, sprintf("select * from pulses where sweep_key = max(%d, (select min(sweep_key) from pulses)) order by ts", 1 + sk))
-              got = TRUE
-          },
-          error = function(e) {
-          }
-          )
+  f = readLines(fcon, n=1)
+## e.g.  f="/media/FORCEradar9/2015-09-16/06/FORCEVC-2015-09-16T06-05-50.979752.dat"
+  if (length(f) == 0 || ! isTRUE(file.exists(f))) {
+      cat("Skipping missing file ", f, "\n")
+      Sys.sleep(0.1)
+      next
   }
-##  dbDisconnect(con)
-  sk = x$sweep_key[1]
+  con = file(f, "rb")
+  hdr = readLines(con, n=2)
 
-  options(digits=14)
+  if (hdr[1] != "DigDar radar sweep file") {
+      cat("Skipping bogus file ", f, "\n")
+      Sys.sleep(0.1)
+      close(con)
+      next
+  }
+  cat("Reading file ", f, "\n")
+  meta = fromJSON(hdr[2])
+
+  samplesPerPulse = meta$ns
+  samplingRate = meta$clock * 1e6
+  decimation = meta$decim
+  
+  ## metres per sample
+  mps = VELOCITY_OF_LIGHT / (samplingRate / decimation) / 2.0
+
+  x = data.frame(
+      clocks  = readBin(con, integer(), n = meta$np, size=4),
+      azi     = readBin(con, numeric(), n = meta$np, size=4),
+      trigs   = readBin(con, integer(), n = meta$np, size=4)
+      )
+  samples = readBin(con, raw(), n = meta$np * meta$ns * 2)
+  dim(samples) = c(meta$ns * 2, meta$np)
+  close(con)
 
   ## get pulses uniformly spread around circle
 
   keep = approx(x$azi,1:nrow(x),desiredAzi, method="constant", rule=2)$y
   
-  x=x[keep,]
-  b = unlist(x$samples) ## concatenate the raw bytes for all pulses into a single raw vector
+  x = x[keep,] ## pulses are rows
+  samples = samples[,keep] ## yes, different index slot than previous line: pulses are columns
   
-  lastAziRangeOffsets = aziRangeOffsets
-  if (file.exists(aziRangeOffsetsFile))
-    aziRangeOffsets = scan(aziRangeOffsetsFile, sep=",", quiet=TRUE)
-
   ## output timestamp of last pulse, and azi/range offsets
-  cat(sprintf("{\n  \"ts\": %.3f,\n  \"samplesPerPulse\": %d,\n  \"pulsesPerSweep\": %d,\n  \"width\": %d,\n   \"height\": %d,\n  \"xlim\": [%f, %f],\n   \"ylim\": [%f, %f],\n  \"ppm\": %f,\n \"aziOffset\": %f,\n  \"rangeOffset\": %f,\n  \"samplingRate\": %f\n}", tail(x$ts, 1), samplesPerPulse, pulsesPerSweep, iwidth, iheight, xlim[1], xlim[2], ylim[1], ylim[2], ppm, aziRangeOffsets[1], aziRangeOffsets[2], samplingRate / decimation ), file=file.path(tmpDir, "FORCERadarSweepMetadata.txt"))
+  metaCon = file(file.path(tmpDir, "FORCERadarSweepMetadata.txt"), "w")
+  cat(sprintf("{\n  \"ts\": %.3f,\n  \"samplesPerPulse\": %d,\n  \"pulsesPerSweep\": %d,\n  \"width\": %d,\n   \"height\": %d,\n  \"xlim\": [%f, %f],\n   \"ylim\": [%f, %f],\n  \"ppm\": %f,\n \"aziOffset\": %f,\n  \"rangeOffset\": %f,\n  \"samplingRate\": %f\n}", meta$ts0, samplesPerPulse, pulsesPerSweep, iwidth, iheight, xlim[1], xlim[2], ylim[1], ylim[2], ppm, aziRangeOffsets[1], aziRangeOffsets[2], samplingRate / decimation ), file=metaCon)
+  close(metaCon)
 
   ## if necessary, regenerate scan converter
-  if (is.null(scanConv) || ! identical(aziRangeOffsets, lastAziRangeOffsets)) {
-    if (! is.null(scanConv))
-      .Call("delete_scan_converter", scanConv)
+  if (is.null(scanConv)) {
     
     scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, iwidth, iheight, 0, 0, iwidth, ylim[2] * ppm, TRUE)), c(ppm * mps, aziRangeOffsets[2] , aziRangeOffsets[1]/360+desiredAzi[1], aziRangeOffsets[1]/360+tail(desiredAzi,1)))
 }
 
-  .Call("apply_scan_converter", scanConv, b, pix, pal, as.integer(c(iwidth, 6100*decimation, 0.5 + decimation * (16383-6100) / 255)))
+  .Call("apply_scan_converter", scanConv, samples, pix, pal, as.integer(c(iwidth, 6100*decimation, 0.5 + decimation * (16383-6100) / 255)))
 
   ## Note: write PNG to newFORCERadarImage.png, then rename to currentFORCERadarImage.png so that
   ##
@@ -251,4 +180,5 @@ while (TRUE) {
   ## the file, it serves either the complete previous image, or the
   ## complete new image, rather than a partial or corrupt image.
   system(sprintf("scp -q %s/currentFORCERadarImage.png %s/FORCERadarSweepMetadata.txt %s:%s; ssh %s '%s'", tmpDir, tmpDir, scpDestUser, scpDestDir, scpDestUser, archiveScript))
-} 
+}
+

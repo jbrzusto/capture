@@ -94,6 +94,7 @@ tcp_reader::go() {
         break;
       if (m == 0) {
         pthread_yield();
+        usleep(1000);
         continue;
       }
       p += m;

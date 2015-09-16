@@ -1,5 +1,6 @@
 #!/bin/sh
-killall rpcapture
-killall R
-killall netcat
-ssh root@rp killall netcat digdar
+echo kill rpcapture and R on local machine
+killall rpcapture R
+
+echo Killing digdar on red pitaya
+sshpass -p root ssh root@rp killall digdar

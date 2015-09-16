@@ -40,11 +40,11 @@ NUMSAMP=3000
 # default decimation rate (1, 2, 8, ...)
 DECIM=1
 
-# default number of pulses in ring buffer
-PULSES=4000
+# default max pulse per sweep
+PULSES=4096
 
 # default number of pulses to transfer per chunk
-CHUNKSIZE=100
+CHUNK_SIZE=64
 
 # default removal is none
 REMOVE=""
@@ -58,7 +58,7 @@ capture: start capturing radar data.
 
 Call like so:
 
-  capture [-d DECIM] [-n SAMPLES] [-p PULSES] [-c CHUNKSIZE] [-r BEGIN:END]*
+  capture [-d DECIM] [-n SAMPLES] [-p PULSES] [-c CHUNK_SIZE] [-r BEGIN:END]*
 
 where:
 
@@ -78,11 +78,10 @@ where:
     multiplied by the range resolution, gives the total range we
     capture out to.  Default value: $NUMSAMP
 
-  - PULSES is how many pulses to allocate in the ring buffer on the
-    digitizer.  Default value: $PULSES
+  - PULSES is max pulse per sweep.  Default value: $PULSES
 
-  - CHUNKSIZE is the number of pulses to transfer at a time.  This must
-    divide evenly into PULSES.  Default value: $CHUNKSIZE.
+  - CHUNK_SIZE is the number of pulses to transfer at a time.  This must
+    divide evenly into PULSES.  Default value: $CHUNK_SIZE.
 
   - BEGIN:END specify portions of the circle to *not* capture.  BEGIN
     and END are both numbers in [0, 1]
@@ -108,8 +107,8 @@ This command starts the following processes:
  - a digitizing process on the local redpitaya / digdar digitizer, which
    must be on the local area network at address $DIGDARHOST
 
- - a capture process on this computer, which stores captured pulses in a database
-   with a filename of the form $DATADIR/$OUTFILE
+ - a capture process on this computer, which stores captured pulses in sweep files
+   in a hierarchy of the form YYYY-MM-DD/HH/ under $DATADIR
 
  - a process to generate and push sweep images to the server at discovery.acadiau.ca
 
@@ -139,13 +138,8 @@ if [[ "$1" == "-p" ]]; then
 fi
 
 if [[ "$1" == "-c" ]]; then
-    CHUNKSIZE=$2
+    CHUNK_SIZE=$2
     shift 2;
-fi
-
-if (( $PULSES % $CHUNKSIZE != 0 )); then
-    echo "Error: CHUNKSIZE must divide evenly into PULSES"
-    exit 1
 fi
 
 while [[ "$1" != "" ]]; do
@@ -167,21 +161,28 @@ else
     USE_SUM=""
 fi
 
-# Listen on port PORT for raw pulse data from the redpitaya digitizer, and pipe this into
-# the capture process. 
+# Listen on port PORT for raw pulse data from the redpitaya digitizer, record it as sweep files
+# and upload raw images from these.
 
-/home/radar/capture/rpcapture -p 15000 -P $PORT -d $DECIM -n $NUMSAMP -T $DATADIR/$OUTFILE 2>/tmp/rpcapturelog.txt &
+CMD="/home/radar/capture/rpcapture -p $PULSES -P $PORT -d $DECIM -n $NUMSAMP -T $DATADIR 2>/tmp/rpcapturelog.txt | \n /home/radar/capture/pushLiveImages.R $REMOVE > $DATADIR/$LOGFILE 2>&1 "
 
-sleep 2
+echo Will run $CMD
+( 
+   /home/radar/capture/rpcapture -p $PULSES -P $PORT -d $DECIM -n $NUMSAMP -T $DATADIR 2>/tmp/rpcapturelog.txt | \
+   R -f /home/radar/capture/pushLiveImages.R $REMOVE > $DATADIR/$LOGFILE 2>&1 
+) &
+
+sleep 3
 
 # set the red pitaya's RTC.  FIXME: we should be running ntpd or chrony
 # on there instead!  Precision here is 1s.
 
-ssh -o ControlMaster=no -o ControlPath=none root@$DIGDARHOST date `date "+%m%d%H%M%Y.%S"`
+echo Will set clock on RP
+sshpass -p root ssh -o ControlMaster=no -o ControlPath=none root@$DIGDARHOST date `date "+%m%d%H%M%Y.%S"`
 
 # start the digdar digitizing process on the redpitaya
-ssh -o ControlMaster=no -o ControlPath=none -f -n root@$DIGDARHOST "/opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNKSIZE $USE_SUM $REMOVE -t $LOCALHOST:$PORT &"
+
+echo On redpitaya, will do /opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNK_SIZE $USE_SUM $REMOVE -t $LOCALHOST:$PORT 
+sshpass -p root ssh -o ControlMaster=no -o ControlPath=none -f -n root@$DIGDARHOST "/opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNK_SIZE $USE_SUM $REMOVE -t $LOCALHOST:$PORT &"
 
 
-# start generating and pushing live images
-/home/radar/capture/pushLiveImages.R --dbdir $DATADIR --samples $NUMSAMP --sampling_rate 125e6 --decim $DECIM $REMOVE > $DATADIR/$LOGFILE 2>&1 &

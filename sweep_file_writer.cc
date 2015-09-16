@@ -49,10 +49,12 @@ sweep_file_writer::~sweep_file_writer ()
 int
 sweep_file_writer::record_pulse (double ts, uint32_t trigs, uint32_t trig_clock, float azi, uint32_t num_arp, float elev, float rot, void * buffer)
 {
-  if (nARP >= 0 && nARP != num_arp) {
-    write_file();
+  if (nARP != num_arp) {
+    if (nARP >= 0)
+      write_file();
     nARP = num_arp;
   }
+
   if (np == max_pulses)
     return 1; // max pulse count exceeded
 
@@ -88,7 +90,7 @@ sweep_file_writer::write_file() {
   tplate += us_buf;
 
   // create the filename
-  int fnlen = tplate.length() + 4;
+  int fnlen = tplate.length() + 6;
   char filename[fnlen + 1];
   strftime(filename, fnlen, tplate.c_str(), gmtime(& ts));
   
@@ -98,22 +100,26 @@ sweep_file_writer::write_file() {
   FILE *f = fopen(p.string().c_str(), "wb");
 
   // put out two lines of text header
-  fputs("DigDar sweep file; version = 1.0\n", f);
+  fputs("DigDar radar sweep file\n", f);
   // fixme: add an arbitrary JSON property list using methods
   // addParam(std::string, double)
   // addParam(std::string, int)
   // addParam(std::string, std::string)
 
-  fprintf(f, "{\"np\":%d,\"ns\":%d,\"fmt\":%d,\"ts0\":%.6f,\"tsn\":%.6f,\"range0\":%.3f,\"clock\":%.6f,\"decim\":%d,\"mode\":\"%s\"}\n",
+  fprintf(f, "{\"version\":\"%s\",\"arp\":%d,\"np\":%d,\"ns\":%d,\"fmt\":%d,\"ts0\":%.6f,\"tsn\":%.6f,\"range0\":%.3f,\"clock\":%.6f,\"decim\":%d,\"mode\":\"%s\",\"bytes\":%lu}\n",
+          VERSION,
+          nARP,
           np,
           samples,
           fmt,
           ts0,
-          ts0 + (clock_buf[np - 1] - clock_buf[0]) / clock,
+          ts0 + (clock_buf[np - 1] - clock_buf[0]) / (1e6 * clock), // clock is in MHz
           range0,
           clock,
           decim,
-          mode.c_str());
+          mode.c_str(),
+          np * (sizeof(clock_buf[0]) + sizeof(azi_buf[0]) + sizeof(trig_buf[0]) + sizeof(sample_buf[0]) * samples)
+          );
 
   // write each binary object
   fwrite(clock_buf, sizeof(clock_buf[0]), np, f);
@@ -121,9 +127,13 @@ sweep_file_writer::write_file() {
   fwrite(trig_buf, sizeof(trig_buf[0]), np, f);
   fwrite(sample_buf, sizeof(sample_buf[0]), np * samples, f);
   fclose(f);
-  
+
+  // report file written to stdout
+  std::cout << p.string() << std::endl;
+
   // mark buffers as empty
   np = 0;
   return 0;
 };
 
+const char * const sweep_file_writer::VERSION = "1.0.0";
