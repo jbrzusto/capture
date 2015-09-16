@@ -56,6 +56,9 @@ tcp_reader::go() {
                   local->ai_protocol);
     if (infd == -1)
       continue;
+
+    int enable = 1;
+    setsockopt(infd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
     
     if (bind(infd, local->ai_addr, local->ai_addrlen) != -1)
       break;                  /* Success */
