@@ -65,7 +65,7 @@ VELOCITY_OF_LIGHT = 2.99792458E8
 
 ## Desired image extents
 ##  xlim is east/west (negative = west)
-xlim = c(-8594, 0)
+xlim = c(-6000, 0)
 iwidth = round(diff(xlim) * ppm)
 ##  xlim is north/south (negative = south)
 ylim = c(-5775, 2182)
@@ -132,8 +132,10 @@ while (TRUE) {
       next
   }
   meta = fromJSON(hdr[2])
-  if (as.numeric(Sys.time()) - meta$ts0 > 60)
+  if (as.numeric(Sys.time()) - meta$ts0 > 60) {
+      close(con)
       next
+  }
   samplesPerPulse = meta$ns
   samplingRate = meta$clock * 1e6
   decimation = meta$decim
@@ -168,7 +170,7 @@ while (TRUE) {
       scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, iwidth, iheight, 0, 0, iwidth, ylim[2] * ppm, TRUE)), c(ppm * mps, aziRangeOffsets[2] , aziRangeOffsets[1]/360+desiredAzi[1], aziRangeOffsets[1]/360+tail(desiredAzi,1)))
   }
 
-  .Call("apply_scan_converter", scanConv, samples, pix, pal, as.integer(c(iwidth, 6100*decimation, 0.5 + decimation * (16383-6100) / 255)))
+  .Call("apply_scan_converter", scanConv, samples, pix, pal, as.integer(c(iwidth, 8192*decimation, 0.5 + decimation * (16383-8192) / 255)))
 
   ## Note: write PNG to newFORCERadarImage.png, then rename to currentFORCERadarImage.png so that
   ##
