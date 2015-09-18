@@ -17,7 +17,7 @@
 tmpDir = "/tmp"
 
 ## desired pixels per metre
-ppm = 1.0 / 30
+ppm = 1.0 / 4.8
 
 ## Azimuth and Range Offsets: if the heading pulse is flaky, azimuth offset must
 ## be used to set the orientation - in radians.  This can be changed
@@ -89,7 +89,7 @@ if (is.null(removal)) {
 
 pulsesPerSweep = length(desiredAzi)
 
-##library(jpeg)
+library(jpeg)
 library(png)
 library(jsonlite)
 dyn.load("/home/radar/capture/capture_lib.so")
@@ -113,12 +113,13 @@ while (! file.exists(filelist) ) {
 
 fcon = file(filelist, "r")
 
+ni = 0
 while (TRUE) {
-  seek(fcon, where=seek(fcon, rw="r"), rw="R")
+  seek(fcon, where=seek(fcon, rw="r"), rw="r")
   f = readLines(fcon, n=1)
 ## e.g.  f="/media/FORCEradar9/2015-09-16/06/FORCEVC-2015-09-16T06-05-50.979752.dat"
   if (length(f) == 0 || ! isTRUE(file.exists(f))) {
-      Sys.sleep(0.05)
+      Sys.sleep(0.1)
       next
   }
   con = file(f, "rb")
@@ -130,9 +131,9 @@ while (TRUE) {
       close(con)
       next
   }
-  cat("Reading file ", f, "\n")
   meta = fromJSON(hdr[2])
-
+  if (as.numeric(Sys.time()) - meta$ts0 > 60)
+      next
   samplesPerPulse = meta$ns
   samplingRate = meta$clock * 1e6
   decimation = meta$decim
@@ -164,23 +165,20 @@ while (TRUE) {
   ## if necessary, regenerate scan converter
   if (is.null(scanConv)) {
     
-    scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, iwidth, iheight, 0, 0, iwidth, ylim[2] * ppm, TRUE)), c(ppm * mps, aziRangeOffsets[2] , aziRangeOffsets[1]/360+desiredAzi[1], aziRangeOffsets[1]/360+tail(desiredAzi,1)))
-}
+      scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, iwidth, iheight, 0, 0, iwidth, ylim[2] * ppm, TRUE)), c(ppm * mps, aziRangeOffsets[2] , aziRangeOffsets[1]/360+desiredAzi[1], aziRangeOffsets[1]/360+tail(desiredAzi,1)))
+  }
 
   .Call("apply_scan_converter", scanConv, samples, pix, pal, as.integer(c(iwidth, 6100*decimation, 0.5 + decimation * (16383-6100) / 255)))
 
   ## Note: write PNG to newFORCERadarImage.png, then rename to currentFORCERadarImage.png so that
   ##
-  pngFile = file(file.path(tmpDir, "currentFORCERadarImage.png"), "wb")
-  writePNG(pix, pngFile)
-  close(pngFile)
-  ## jpgFile = file(file.path(tmpDir, "currentFORCERadarImage.jpg"), "wb")
-  ## writeJPEG(pix, jpgFile, quality=0.5, bg="black") ## this is actually sufficient!
-  ## close(jpgFile)
+  jpgFile = file(file.path(tmpDir, "currentFORCERadarImage.jpg"), "wb")
+  writeJPEG(pix, jpgFile, quality=0.5, bg="black")
+  close(jpgFile)
   ## Copy file to server, then rename 'current' to plain version; this
   ## is done atomically, so that if the web server process is serving
   ## the file, it serves either the complete previous image, or the
   ## complete new image, rather than a partial or corrupt image.
-  system(sprintf("scp -q %s/currentFORCERadarImage.png %s/FORCERadarSweepMetadata.txt %s:%s; ssh %s '%s'", tmpDir, tmpDir, scpDestUser, scpDestDir, scpDestUser, archiveScript), wait=FALSE)
+ system(sprintf("scp -q %s/currentFORCERadarImage.jpg %s/FORCERadarSweepMetadata.txt %s:%s; ssh %s '%s'", tmpDir, tmpDir, scpDestUser, scpDestDir, scpDestUser, archiveScript), wait=TRUE)
 }
 
