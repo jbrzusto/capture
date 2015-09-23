@@ -8,6 +8,10 @@
 
 #include "tcp_reader.h"
 
+#ifdef DEBUG
+#include "pulse_metadata.h"
+#endif
+
 #include <stdexcept>
 
 #include <unistd.h>
@@ -84,10 +88,17 @@ tcp_reader::go() {
   // pulse count
   int pc = 0;
 
+#ifdef DEBUG
+  double last_ts = -1;
+#endif
+
   // read from the connection for as long as there are data
   do {
     // get the location of an available chunk 
     unsigned char * p = buf->chunk_for_writing();
+#ifdef DEBUG
+    pulse_metadata *p0 = (pulse_metadata *) p;
+#endif
     int n = buf->get_chunk_size();
     // read into the current chunk until full
     int m;
@@ -104,6 +115,13 @@ tcp_reader::go() {
       n -= m;
     } while (n > 0);
     buf->done_writing_chunk();
+#ifdef DEBUG
+    double ts = p0->arp_clock_sec * 1.0 + p0->arp_clock_nsec * 1.0e-9;
+    if (ts < last_ts)
+      std::cerr << "tcpreader: time inversion from " << last_ts << " to " << ts << std::endl;
+    last_ts = ts;
+
+#endif
     ++pc;
     //    std::cerr << "Read pulses from socket: " << pc << "\n";
   } while (m >= 0);
