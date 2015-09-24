@@ -39,6 +39,12 @@ shared_ring_buffer::read_chunk()
   int ci;
   pthread_mutex_lock(&index_mutex);
 
+  // if we've caught up with the writer, fail; we have already read this chunk,
+  // which the writer had finished, but the writer has not advanced to a new
+  // chunk yet.  This fixes the problem of the reader passing the writer.
+  if (reader_chunk_index == writer_chunk_index)
+    return 0;
+
   // try bump up to the next chunk in the ring
   ci = (1 + reader_chunk_index) % num_chunks;
 
