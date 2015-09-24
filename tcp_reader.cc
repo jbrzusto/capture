@@ -116,9 +116,11 @@ tcp_reader::go() {
     } while (n > 0);
     buf->done_writing_chunk();
 #ifdef DEBUG2
-    double ts = p0->arp_clock_sec * 1.0 + p0->arp_clock_nsec * 1.0e-9;
-    if (ts < last_ts)
+    double ts = p0->arp_clock_sec + 1.0e-9*(p0->arp_clock_nsec + 8 * p0->trig_clock);
+    if (ts < last_ts) {
       std::cerr << "tcpreader: time inversion from " << last_ts << " to " << ts << std::endl;
+      std::cerr << "trig_clock: " << p0->num_trig << "; num_trig: " << p0->num_trig << std::endl;
+    }
     last_ts = ts;
 
 #endif

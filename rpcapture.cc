@@ -201,6 +201,9 @@ int main(int argc, char *argv[])
   // cap->addParam( "Elev", 30 );
   // cap->addParam( "Tide", 8 );
 
+  std::cerr << std::setprecision(15);
+  std::cout << std::setprecision(15);
+
   try {
     do_capture (cap, n_samples, max_pulses, interface, port);
   } catch (std::runtime_error e)
