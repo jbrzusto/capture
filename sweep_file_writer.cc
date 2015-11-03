@@ -82,11 +82,10 @@ sweep_file_writer::write_file() {
   time_t ts = (time_t) floor(ts0);
   int us = round(1000000 * fmod(ts0, 1.0));
   // path length:   FOLDER / YYYY-MM-DD / HH / SITE-YYYY-MM-DDTHH-MM-SS.UUUUUU.dat
-  char path_buf[folder.length() + 14 + site.length() + 32 + 10];
+  char path_buf[folder.length() + site.length() + 32 + 10];
 
   std::string tplate = folder;
   tplate += "/";
-  tplate += "%Y-%m-%d/%H/";
 
   tplate += site;
   tplate += "-%Y-%m-%dT%H-%M-%S";
@@ -102,7 +101,6 @@ sweep_file_writer::write_file() {
   strftime(filename, fnlen, tplate.c_str(), gmtime(& ts));
   
   boost::filesystem::path p(filename);
-  boost::filesystem::create_directories(p.parent_path());
 
   FILE *f = fopen(p.string().c_str(), "wb");
 

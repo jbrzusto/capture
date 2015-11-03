@@ -252,7 +252,7 @@ do_capture  (sweep_file_writer * cap, unsigned short n_samples, unsigned max_pul
       if (srb.is_done())
         break;
       pthread_yield();
-      usleep(1000); // sleep 1 ms before retrying
+      usleep(1000); // sleep 10 ms before retrying
       continue;
     }
     pulse_metadata * meta = (pulse_metadata *) & pulsebuf[0];
