@@ -4,6 +4,8 @@
 ## current time if none is specified, truncated down to a multiple of
 ## M minutes, then bzip2 the file and send it to the FORCE server.
 
+Sys.setenv(TZ="GMT")
+
 ## number of consecutive sweeps to export at each time step
 N = 257
 
@@ -78,6 +80,7 @@ hours = data.frame(path = I(hours), dateHour = I(file.path(basename(dirname(hour
 library(lubridate)
 library(flow)
 library(jsonlite)
+library(XML)
 
 ## if user specified a date/time on command line, use that; otherwise,
 ## use most recently completed time period.
