@@ -12,6 +12,9 @@ N = 257
 ## minutes per timestep
 M = 30
 
+## length of time used per timestep, in minutes
+SLEN = 10
+
 ## destination user, host, address folder for .pol files
 SCP_DEST = "radar_upload@force:/mnt/raid1/radar/fvc"
 
@@ -87,7 +90,7 @@ library(XML)
 
 ts = commandArgs(TRUE)[1]
 if (is.na(ts)) {
-    now = Sys.time() - M * 60
+    now = Sys.time() - SLEN * 60
 } else {
     now = ymd_hms(ts)
 }
