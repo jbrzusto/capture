@@ -34,6 +34,18 @@ hours = data.frame(path = I(hours), dateHour = I(file.path(basename(dirname(hour
 
 hours = hours[order(hours$dateHour),]
 
+## start the inotifywait command, which will report events in the radar spool directory.
+## we're interested in these:
+## - close of file in spool dir after it has been read by the process which scan converts it to a JPEG
+## and pushes that to a different server; e.g.:
+##  /radar_spool/,FORCEVC-2015-11-04T03-02-54.169557.dat,CLOSE_NOWRITE,CLOSE
+##
+## FIXME: watch storage directory for addition of new mounts
+
+evtCon = pipe(paste("/usr/bin/inotifywait -q -m -e close_nowrite --format %w,%f,%e", RADAR_SPOOL), "r")
+
+## get list of files already in spool directory
+
 spoolFiles = dir(RADAR_SPOOL)
 
 getFreeSpace = function() {
@@ -61,18 +73,12 @@ getFreeSpace = function() {
 fsCheckAt = 100L
 fsCheckCounter = fsCheckAt
 
-## start the inotifywait command, which will report events in the radar spool directory.
-## we're interested in these:
-## - close of file in spool dir after it has been read by the process which scan converts it to a JPEG
-## and pushes that to a different server; e.g.:
-##  /radar_spool/,FORCEVC-2015-11-04T03-02-54.169557.dat,CLOSE_NOWRITE,CLOSE
-##
-## FIXME: watch storage directory for addition of new mounts
-
-evtCon = NULL
-
-## keep track of most recent 10 files.
+## keep track of most recent 100 files.
+filesDoneCount = 100
 filesDone = c()
+
+## allow up to 1 existing spool file moves for each new one added
+allowedFakeEvents = 1L
 
 while (TRUE) {
     if (fsCheckCounter == fsCheckAt) {
@@ -86,24 +92,24 @@ while (TRUE) {
         fsCheckCounter = 0L
         curDrive = drives[which.max(free)]
     }
-    if (length(spoolFiles) > 0) {
+    if (length(spoolFiles) > 0L & allowedFakeEvents > 0L) {
         evt = matrix(c(RADAR_SPOOL, spoolFiles[1], "CLOSE_NOWRITE"), nrow=1)
         spoolFiles = spoolFiles[-1]
+        allowedFakeEvents = allowedFakeEvents - 1L
     } else {
-        if (is.null(evtCon)) {
-            evtCon = pipe(paste("/usr/bin/inotifywait -q -m -e close_nowrite --format %w,%f,%e", RADAR_SPOOL), "r")
-        }
         evt = readLines(evtCon, n=1)
         evt = read.csv(textConnection(evt), as.is=TRUE, header=FALSE)
+        allowedFakeEvents = 1L
     }
-    if (evt[1,1] == RADAR_SPOOL && evt[1,3] == "CLOSE_NOWRITE" && ! evt[1,2] %in% filesDone) {
+##    print(evt)
+    if (evt[1,1] == RADAR_SPOOL && evt[1,3] == "CLOSE_NOWRITE" && !is.na(evt[1,2]) && ! evt[1,2] %in% filesDone ) {
         ## new file, so move it to the appropriate location
         ## we are guaranteed by preceding code to have space
         ## for it
 
         ## keep track of which files have been done recently, so we don't
         ## handle multiple events on a single file.
-        filesDone = tail(c(filesDone, evt[1,2]), 10)
+        filesDone = tail(c(filesDone, evt[1,2]), filesDoneCount)
         
         parts = strsplit(evt[1,2], "[-T]", perl=TRUE)[[1]]
 
@@ -122,13 +128,13 @@ while (TRUE) {
 
         from = file.path(RADAR_SPOOL, evt[1,2])
         ## compress the file to a new location in storage
-        cmd = sprintf("gzip -c '%s' > '%s.gz'",
+        cmd = sprintf("gzip -c '%s' > '%s.gz'; rm -f '%s'",
                        from,
-                       file.path(path, evt[1,2]))
+                       file.path(path, evt[1,2]),
+                      from)
         ## cat("About to do ", cmd, "\n")
-        system(cmd, wait=TRUE)
+        system(cmd, wait=FALSE)
 
-        file.remove(from)
         fsCheckCounter = fsCheckCounter + 1L
     }
 }
