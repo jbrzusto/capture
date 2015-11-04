@@ -13,6 +13,9 @@ RADAR_SPOOL = "/radar_spool/"
 ## in subfolders two levels down with paths %Y-%m-%d/%H
 RADAR_STORE = "/mnt/radar_storage"
 
+## regex matching sweep files
+SWEEP_FILE_REGEX = "\\.dat$"
+
 ## threshold for free space (bytes) in total radar storage.
 ## when free space drops below this value, a delete
 ## of the oldest hour(s) of files occurs until the free space
@@ -102,16 +105,23 @@ while (TRUE) {
         allowedFakeEvents = 1L
     }
 ##    print(evt)
-    if (evt[1,1] == RADAR_SPOOL && evt[1,3] == "CLOSE_NOWRITE" && !is.na(evt[1,2]) && ! evt[1,2] %in% filesDone ) {
+    fn = evt[1, 2]
+    
+    if (evt[1,1] == RADAR_SPOOL     &&
+        evt[1,3] == "CLOSE_NOWRITE" &&
+        ! is.na(fn)                 &&
+        ! fn %in% filesDone         &&
+        grepl( SWEEP_FILE_REGEX, fn, perl=TRUE)
+        ) {
         ## new file, so move it to the appropriate location
         ## we are guaranteed by preceding code to have space
         ## for it
 
         ## keep track of which files have been done recently, so we don't
         ## handle multiple events on a single file.
-        filesDone = tail(c(filesDone, evt[1,2]), filesDoneCount)
+        filesDone = tail(c(filesDone, fn), filesDoneCount)
         
-        parts = strsplit(evt[1,2], "[-T]", perl=TRUE)[[1]]
+        parts = strsplit(fn, "[-T]", perl=TRUE)[[1]]
 
         ## parts looks like:
         ##    [1] "FORCEVC"       "2015"          "11"            "04"           
@@ -126,11 +136,11 @@ while (TRUE) {
             hours = rbind(hours, data.frame(path = I(path), dateHour=I(dateHour)))
         }
 
-        from = file.path(RADAR_SPOOL, evt[1,2])
+        from = file.path(RADAR_SPOOL, fn)
         ## compress the file to a new location in storage
         cmd = sprintf("gzip -c '%s' > '%s.gz'; rm -f '%s'",
                        from,
-                       file.path(path, evt[1,2]),
+                       file.path(path, fn),
                       from)
         ## cat("About to do ", cmd, "\n")
         system(cmd, wait=FALSE)
