@@ -124,7 +124,7 @@ outname = exportWamos(sweeps, path="/tmp", depths=depth, nACP=450, aziLim=c(0.12
 bzName = paste(outname, ".bz2", sep="")
 
 ## compress file; copy to FORCE workstation; delete
-system(paste("bzip2 -9", outname, "; scp -q -i ~/.ssh/id_dsa_vc_radar_laptop", bzName, SCP_DEST, ";", "rm -f", bzName))
+system(paste("bzip2 -9", outname, "; scp -oControlMaster=no -q -i ~/.ssh/id_dsa_vc_radar_laptop", bzName, SCP_DEST, ";", "rm -f", bzName))
 
 
 
