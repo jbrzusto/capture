@@ -71,6 +71,9 @@ fsCheckCounter = fsCheckAt
 
 evtCon = NULL
 
+## keep track of most recent 10 files.
+filesDone = c()
+
 while (TRUE) {
     if (fsCheckCounter == fsCheckAt) {
         free = getFreeSpace()
@@ -93,10 +96,15 @@ while (TRUE) {
         evt = readLines(evtCon, n=1)
         evt = read.csv(textConnection(evt), as.is=TRUE, header=FALSE)
     }
-    if (evt[1,1] == RADAR_SPOOL && evt[1,3] == "CLOSE_NOWRITE") {
+    if (evt[1,1] == RADAR_SPOOL && evt[1,3] == "CLOSE_NOWRITE" && ! evt[1,2] %in% filesDone) {
         ## new file, so move it to the appropriate location
         ## we are guaranteed by preceding code to have space
         ## for it
+
+        ## keep track of which files have been done recently, so we don't
+        ## handle multiple events on a single file.
+        filesDone = tail(c(filesDone, evt[1,2]), 10)
+        
         parts = strsplit(evt[1,2], "[-T]", perl=TRUE)[[1]]
 
         ## parts looks like:
