@@ -44,7 +44,7 @@ library(jsonlite)
 
 ts = commandArgs(TRUE)[1]
 if (is.na(ts)) {
-    now = Sys.time()
+    now = Sys.time() - M * 60
 } else {
     now = ymd_hms(ts)
 }
@@ -53,7 +53,7 @@ topOfDay = trunc(now, "days")
 
 minutes = floor(diff(as.numeric(c(topOfDay, now))) / 60)
 
-lastStepStart = floor((minutes - M) / M) * M
+lastStepStart = floor(minutes / M) * M
 
 start = topOfDay + 60 * lastStepStart
 
@@ -124,7 +124,7 @@ outname = exportWamos(sweeps, path="/tmp", depths=depth, nACP=450, aziLim=c(0.12
 bzName = paste(outname, ".bz2", sep="")
 
 ## compress file; copy to FORCE workstation; delete
-system(paste("bzip2 -9", outname, "; scp -oControlMaster=no -q -i ~/.ssh/id_dsa_vc_radar_laptop", bzName, SCP_DEST, ";", "rm -f", bzName))
+system(paste("bzip2 -9", outname, "; scp -oControlMaster=no -oControlPath=none -i ~/.ssh/id_dsa_vc_radar_laptop", bzName, SCP_DEST, ";", "rm -f", bzName))
 
 
 
