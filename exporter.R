@@ -13,6 +13,46 @@ M = 30
 ## destination user, host, address folder for .pol files
 SCP_DEST = "radar_upload@force:/mnt/raid1/radar/fvc"
 
+###########################################################################
+##
+## summary image options
+##
+##
+## desired pixels per metre
+ppm = 1.0 / 4.8
+
+## Azimuth and Range Offsets: if the heading pulse is flaky, azimuth offset must
+## be used to set the orientation - in radians.  This can be changed
+## dynamically by putting a numeric value (in degrees) in the file
+## azimuthOffset.txt in the working directory, as is done for palette.
+## 3rd, 4th elts are Offset of NE corner of image from radar, in metres [N, E].
+## Increasing these values shifts the coverage to the NE.
+
+aziRangeOffsets = c(46.8,0,2200,500)
+## Desired image extents
+##  xlim is east/west (negative = west)
+xlim = c(-6000, 0)
+iwidth = round(diff(xlim) * ppm)
+##  xlim is north/south (negative = south)
+ylim = c(-5775, 2182)
+iheight = round(diff(ylim) * ppm)
+
+library(jpeg)
+dyn.load("/home/radar/capture/capture_lib.so")
+
+pix = matrix(0L, iheight, iwidth)
+class(pix)="nativeRaster"
+attr(pix, "channels") = 4
+
+scanConv = NULL
+sk = 0
+
+pal = readRDS("/home/radar/capture/radarImagePalette.rds")  ## low-overhead read of palette, to allow changing dynamically
+
+##
+##
+###############################################################
+
 ## directory where ongoing radar storage is mounted
 ## each disk is mounted in a subfolder, then sweeps are stored
 ## in subfolders two levels down with paths %Y-%m-%d/%H
@@ -114,17 +154,61 @@ for(i in seq(along=useFiles)) {
     meta$rate = meta$clock * 1e6 / meta$decim
     attr(sweeps[[i]], "radar.meta") = meta
     close(con)
+    if (i == 1) {
+        ## create a summary image from this sweep
+        x = sweeps[[1]]
+        dim(x$samples) = c(meta$ns * 2, meta$np)
+        
+        samplingRate = meta$clock * 1e6
+        decimation = meta$decim
+        
+        ## metres per sample
+        mps = VELOCITY_OF_LIGHT / (samplingRate / decimation) / 2.0
+
+        ## azimuth range of valid pulses at 0.1 deg spacing
+
+
+        ## Pulses per sweep: a kludgy way to achieve a fixed number of pulses
+        ##   per sweep, currently needed by the scan converter.  The
+        ##   Bridgemaster E operating in short pulse mode generates pulses @
+        ##   1800 Hz and rotates at 28 RPM for a total of ~ 3857 pulses per
+        ##   sweep. We select down to 3600 pulses, which gives 0.1 degree
+        ##   azimuth resolution.
+
+        desiredAzi = seq(from = 0.12, to = 0.43, by = 1.0 / 3600)
+        pulsesPerSweep = length(desiredAzi)
+
+        ## get pulses uniformly spread around circle
+        
+        keep = approx(x$azi, seq(along=x$azi), desiredAzi, method="constant", rule=2)$y
+        
+        x$samples = x$samples[,keep]
+        
+        scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, meta$ns, iwidth, iheight, 0, 0, iwidth, ylim[2] * ppm, TRUE)), c(ppm * mps, aziRangeOffsets[2] , aziRangeOffsets[1]/360+desiredAzi[1], aziRangeOffsets[1]/360+tail(desiredAzi,1)))
+    
+        .Call("apply_scan_converter", scanConv, x$samples, pix, pal, as.integer(c(iwidth, 8192 * decimation, 0.5 + decimation * (16383 - 8192) / 255)))
+    }
 }
+
 
 ## get depths at each frame
 
 depth = getDepth(as.numeric(fts))
 
+## export as Wamos file
 outname = exportWamos(sweeps, path="/tmp", depths=depth, nACP=450, aziLim=c(0.12, 0.43),rangeLim=c(0,3000), decim=3)
+
+## write out jpeg
+outnameStem = sub(".pol", "", outname, fixed=TRUE)
+
+jpgFile = paste(outnameStem, ".jpg", sep="")
+writeJPEG(pix, jpgFile, quality=0.5, bg="black")
+
 bzName = paste(outname, ".bz2", sep="")
 
 ## compress file; copy to FORCE workstation; delete
-system(paste("bzip2 -9", outname, "; scp -oControlMaster=no -oControlPath=none -i ~/.ssh/id_dsa_vc_radar_laptop", bzName, SCP_DEST, ";", "rm -f", bzName))
+system(paste("bzip2 -9", outname, "; scp -oControlMaster=no -oControlPath=none -i ~/.ssh/id_dsa_vc_radar_laptop", paste(outnameStem, "*", sep=""), SCP_DEST, ";", "rm -f", paste(outnameStem, "*", sep="")))
+
 
 
 
