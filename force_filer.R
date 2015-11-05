@@ -1,4 +1,4 @@
-#!/home/john/bin/Rscript
+#!/home/johnb/bin/Rscript
 ##
 ## move radar files from the spool directory to ongoing storage
 
