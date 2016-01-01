@@ -202,7 +202,7 @@ for(i in seq(along=useFiles)) {
 depth = getDepth(as.numeric(fts))
 
 ## export as Wamos file
-outname = exportWamos(sweeps, path="/tmp", depths=depth, nACP=450, aziLim=c(0.12, 0.43),rangeLim=c(0,3000), decim=3)
+outname = exportWamos(sweeps, path="/tmp", depths=depth, nACP=450, aziLim=c(0.12, 0.43),rangeLim=c(0,4000), decim=3)
 
 ## write out jpeg
 outnameStem = sub(".pol", "", outname, fixed=TRUE)
@@ -213,7 +213,7 @@ writeJPEG(pix, jpgFile, quality=0.5, bg="black")
 bzName = paste(outname, ".bz2", sep="")
 
 ## compress file; copy to FORCE workstation; delete
-system(paste("bzip2 -9", outname, "; scp -oControlMaster=no -oControlPath=none -i ~/.ssh/id_dsa_vc_radar_laptop", paste(outnameStem, "*", sep=""), SCP_DEST, ";", "rm -f", paste(outnameStem, "*", sep="")))
+system(paste("bzip2 -9", outname, "; if ( scp -oControlMaster=no -oControlPath=none -i ~/.ssh/id_dsa_vc_radar_laptop", paste(outnameStem, "*", sep=""), SCP_DEST, ") then", "rm -f", paste(outnameStem, "*", sep=""), "; fi "))
 
 
 
