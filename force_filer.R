@@ -11,6 +11,9 @@ RADAR_SPOOL = "/mnt/raid1/radar/fvc/"
 ## in subfolders two levels down with paths %Y-%m-%d/%H
 OUTPUT_PATH_TEMPLATE = "/mnt/raid1/radar/fvc/%Y/%m-%d/"
 
+## regexp matching names we want to file
+FILER_REGEX = "^2[0-9][0-9][0-9][01][0-9]{9}.*(\\.pol\\.bz2|\\.jpg)"
+    
 library(lubridate)
 
 ## start the inotifywait command, which will report events in the radar spool directory.
@@ -29,8 +32,14 @@ spoolFiles = dir(RADAR_SPOOL)
 
 while (TRUE) {
     if (length(spoolFiles) > 0L) {
-        evt = matrix(c(RADAR_SPOOL, spoolFiles[1], "CLOSE_WRITE"), nrow=1)
+        sf = spoolFiles[1]
         spoolFiles = spoolFiles[-1]
+        if (grepl(FILER_REGEX, sf, perl=TRUE)) {
+            evt = matrix(c(RADAR_SPOOL, sf, "CLOSE_WRITE"), nrow=1)
+        } else {
+            ## not a file of interest, so continue
+            next
+        }
     } else {
         evt = readLines(evtCon, n=1)
         evt = read.csv(textConnection(evt), as.is=TRUE, header=FALSE)
