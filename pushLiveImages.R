@@ -26,7 +26,10 @@ ppm = 1.0 / 4.8
 ## 3rd, 4th elts are Offset of NE corner of image from radar, in metres [N, E].
 ## Increasing these values shifts the coverage to the NE.
 
+## before 2015-11-26T12-39-00: 
 aziRangeOffsets = c(46.8,0,2200,500)
+
+## Paul Bell's correction, which doesn't seem right: aziRangeOffsets = c(49.5,0,2200,500)
 
 ## SCP Destination User / Host to which images are pushed via secure copy
 scpDestUser = "force-radar@discovery"
