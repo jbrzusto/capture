@@ -105,6 +105,7 @@ fsCheckCounter = fsCheckAt
 
 ## keep track of most recently created file, which will be the one
 ## pushed, once it has been closed on a read.
+lastCreated = ""
 
 ## allow up to 1 existing spool file moves for each new one added
 existingFileMoveMax = if (newOnly) 0 else 5L
