@@ -140,7 +140,7 @@ while (TRUE) {
             grepl( SWEEP_FILE_REGEX, fn, perl=TRUE)
             ) {
             lastCreated = fn
-        } else if (evt[1,3] == "EXISTING" || ( "CLOSE_NOWRITE" &&
+        } else if (evt[1,3] == "EXISTING" || ( evt[1,3] == "CLOSE_NOWRITE" &&
                    ! is.na(fn) &&
                    fn == lastCreated)) {
             ## new file, so move it to the appropriate location
