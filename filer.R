@@ -124,7 +124,7 @@ while (TRUE) {
         curDrive = drives[which.max(free)]
     }
     if (length(spoolFiles) > 0L && (oldOnly || existingFileMoveCount > 0L)) {
-        evt = matrix(c(RADAR_SPOOL, spoolFiles[1], "CLOSE_NOWRITE"), nrow=1)
+        evt = matrix(c(RADAR_SPOOL, spoolFiles[1], "EXISTING"), nrow=1)
         spoolFiles = spoolFiles[-1]
         existingFileMoveCount = existingFileMoveCount - 1L
     } else if (! oldOnly) {
@@ -140,9 +140,9 @@ while (TRUE) {
             grepl( SWEEP_FILE_REGEX, fn, perl=TRUE)
             ) {
             lastCreated = fn
-        } else if (evt[1,3] == "CLOSE_NOWRITE" &&
+        } else if (evt[1,3] == "EXISTING" || ( "CLOSE_NOWRITE" &&
                    ! is.na(fn) &&
-                   fn == lastCreated) {
+                   fn == lastCreated)) {
             ## new file, so move it to the appropriate location
             ## we are guaranteed by preceding code to have space
             ## for it
