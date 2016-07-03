@@ -7,13 +7,16 @@
 Sys.setenv(TZ="GMT")
 
 ## number of consecutive sweeps to export at each time step
-N = 257
+#N = 257
+N = 129
 
 ## minutes per timestep
-M = 30
+#M = 30
+M = 15
 
 ## length of time used per timestep, in minutes
-SLEN = 10
+#SLEN = 10
+SLEN = 5
 
 ## destination user, host, address folder for .pol files
 SCP_DEST = "radar_upload@force:/mnt/raid1/radar/fvc"
@@ -36,12 +39,14 @@ ppm = 1.0 / 4.8
 aziRangeOffsets = c(46.8,0,2200,500)
 ## Desired image extents
 ##  xlim is east/west (negative = west)
-xlim = c(-6000, 0)
+#xlim = c(-6000, 0)
+xlim = c(-9000, 0)
 iwidth = round(diff(xlim) * ppm)
 ##  xlim is north/south (negative = south)
-ylim = c(-5775, 2182)
+ylim = c(-5775, 3182)
 iheight = round(diff(ylim) * ppm)
 
+MaxRange = max(abs(c(xlim, ylim)))
 library(jpeg)
 dyn.load("/home/radar/capture/capture_lib.so")
 
@@ -105,7 +110,9 @@ start = topOfDay + 60 * lastStepStart
 
 startHour = format(start, "%Y-%m-%d/%H")
 
-sourceFolder = hours$path[match(startHour, hours$dateHour)]
+## find folder(s) with matching hour
+
+sourceFolder = hours$path[startHour==hours$dateHour]
 
 if (is.na(sourceFolder)) {
     stop("Couldn't find data starting at", start)
@@ -116,6 +123,9 @@ f = dir(sourceFolder, full.names=TRUE)
 fts = do.call(data.frame,attributes(regexpr(".*([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}\\.[0-9]{6})", f, perl=TRUE)))
 
 fts = ymd_hms(substr(f, fts[,3], fts[,3] + fts[, 4]))
+ord = order(fts)
+f = f[ord]
+fts = fts[ord]
 
 ## index of first file to use
 use = which(as.numeric(fts) >= as.numeric(start))[1:N]
@@ -202,7 +212,7 @@ for(i in seq(along=useFiles)) {
 depth = getDepth(as.numeric(fts))
 
 ## export as Wamos file
-outname = exportWamos(sweeps, path="/tmp", depths=depth, nACP=450, aziLim=c(0.12, 0.43),rangeLim=c(0,3000), decim=3)
+outname = exportWamos(sweeps, path="/tmp", depths=depth, nACP=450, aziLim=c(0.12, 0.43),rangeLim=c(0,MaxRange), decim=3)
 
 ## write out jpeg
 outnameStem = sub(".pol", "", outname, fixed=TRUE)
@@ -213,7 +223,7 @@ writeJPEG(pix, jpgFile, quality=0.5, bg="black")
 bzName = paste(outname, ".bz2", sep="")
 
 ## compress file; copy to FORCE workstation; delete
-system(paste("bzip2 -9", outname, "; scp -oControlMaster=no -oControlPath=none -i ~/.ssh/id_dsa_vc_radar_laptop", paste(outnameStem, "*", sep=""), SCP_DEST, ";", "rm -f", paste(outnameStem, "*", sep="")))
+system(paste("bzip2 -9", outname, "; if ( scp -oControlMaster=no -oControlPath=none -i ~/.ssh/id_dsa_vc_radar_laptop", paste(outnameStem, "*", sep=""), SCP_DEST, ") then", "rm -f", paste(outnameStem, "*", sep=""), "; fi "))
 
 
 
