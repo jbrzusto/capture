@@ -21,7 +21,7 @@ SWEEP_FILE_REGEX = "\\.dat$"
 ## of the oldest hour(s) of files occurs until the free space
 ## rises above this threshold.
 ## 12 GB should cover 1 hour.
-FREE_THRESH = 12e9  
+FREE_THRESH = 12e9
 
 ## if user specifes --old, we only archive existing files
 ## from spool folder.  If user specifies --new, we only archive newly-arrived
@@ -61,29 +61,26 @@ hours = hours[order(hours$dateHour),]
 
 ## start the inotifywait command, which will report events in the radar spool directory.
 ## we're interested in these:
-## - creation of a file
-## - close of that file in spool dir after it has been read by the process which scan converts it to a JPEG
-## and pushes that to a different server; e.g.:
-##  /radar_spool/,FORCEVC-2015-11-04T03-02-54.169557.dat,CLOSE_NOWRITE,CLOSE
+## - move of a file to the spool dir.
 ##
 ## FIXME: watch storage directory for addition of new mounts
 
 if (! oldOnly) {
-    evtCon = pipe(paste("/usr/bin/inotifywait -q -m -e close_nowrite -e create --format %w,%f,%e", RADAR_SPOOL), "r")
+    evtCon = pipe(paste("/usr/bin/inotifywait -q -m -e moved_to --format %w,%f,%e", RADAR_SPOOL), "r")
 } else {
     evtCon = NULL
 }
 
 ## get list of files already in spool directory
 
-spoolFiles = dir(RADAR_SPOOL)
+spoolFiles = sort(dir(RADAR_SPOOL), decreasing=TRUE)
 
 getFreeSpace = function() {
     ## return number of bytes free on disks mounted under radar storage folder
 
     free = unlist(
         lapply(
-            drives, 
+            drives,
             function(d) {
                 v = read.table(textConnection(system(paste("df", d), intern=TRUE)[2]), as.is=TRUE)
                 if (sub("[0-9]","", basename(v[1,1])) == basename(d)) {
@@ -103,12 +100,8 @@ getFreeSpace = function() {
 fsCheckAt = 100L
 fsCheckCounter = fsCheckAt
 
-## keep track of most recently created file, which will be the one
-## pushed, once it has been closed on a read.
-lastCreated = ""
-
-## allow up to 1 existing spool file moves for each new one added
-existingFileMoveMax = if (newOnly) 0 else 5L
+## allow up to 2 existing spool file moves for each new one added
+existingFileMoveMax = if (newOnly) 0 else 2L
 existingFileMoveCount = existingFileMoveMax
 
 while (TRUE) {
@@ -124,25 +117,27 @@ while (TRUE) {
         curDrive = drives[which.max(free)]
     }
     if (length(spoolFiles) > 0L && (oldOnly || existingFileMoveCount > 0L)) {
-        evt = matrix(c(RADAR_SPOOL, spoolFiles[1], "EXISTING"), nrow=1)
+        evt = c(RADAR_SPOOL, spoolFiles[1], "EXISTING")
         spoolFiles = spoolFiles[-1]
         existingFileMoveCount = existingFileMoveCount - 1L
     } else if (! oldOnly) {
-        evt = readLines(evtCon, n=1)
-        evt = read.csv(textConnection(evt), as.is=TRUE, header=FALSE)
-        existingFileMoveCount = existingFileMoveMax
+        repeat {
+            evt = strsplit(readLines(evtCon, n=1), ",")[[1]]
+            if (! is.na(evt[2]) && ! isTRUE(evt[5]=="ISDIR"))
+                break
+            Sys.sleep(0.1)
+        }
     }
-    ## print(evt)
-    fn = evt[1, 2]
-    
-    if (evt[1,1] == RADAR_SPOOL) {
-        if (evt[1,3] == "CREATE" &&
-            grepl( SWEEP_FILE_REGEX, fn, perl=TRUE)
-            ) {
-            lastCreated = fn
-        } else if (evt[1,3] == "EXISTING" || ( evt[1,3] == "CLOSE_NOWRITE" &&
-                   ! is.na(fn) &&
-                   fn == lastCreated)) {
+    fn = evt[2]
+    if (is.na(fn))
+        next
+    from = file.path(RADAR_SPOOL, fn)
+
+    if (isTRUE(file.info(from)$isdir))
+        next
+
+    if (evt[1] == RADAR_SPOOL) {
+        if (evt[3] == "EXISTING" || evt[3] == "MOVED_TO") {
             ## new file, so move it to the appropriate location
             ## we are guaranteed by preceding code to have space
             ## for it
@@ -150,9 +145,9 @@ while (TRUE) {
             parts = strsplit(fn, "[-T]", perl=TRUE)[[1]]
 
             ## parts looks like:
-            ##    [1] "FORCEVC"       "2015"          "11"            "04"           
+            ##    [1] "FORCEVC"       "2015"          "11"            "04"
             ##    [5] "03"            "02"            "54.169557.dat"
-            
+
             dateHour = sprintf("%s-%s-%s/%s", parts[2], parts[3], parts[4], parts[5])
 
             path = file.path(curDrive, dateHour)
@@ -162,19 +157,17 @@ while (TRUE) {
                 hours = rbind(hours, data.frame(path = I(path), dateHour=I(dateHour)))
             }
 
-            from = file.path(RADAR_SPOOL, fn)
             ## compress the file to a new location in storage
-            cmd = sprintf("gzip -c '%s' > '%s.gz'; rm -f '%s'",
+            cmd = sprintf("gzip -c '%s' > '%s.gz'; /bin/rm -f '%s'",
                           from,
                           file.path(path, fn),
                           from)
-            ## cat("About to do ", cmd, "\n")
             system(cmd, wait=FALSE)
 
             fsCheckCounter = fsCheckCounter + 1L
+            if (evt[3] != "EXISTING") {
+	        existingFileMoveCount = existingFileMoveMax
+	    }
         }
     }
 }
-
-        
-               

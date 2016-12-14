@@ -1,6 +1,6 @@
 #!/bin/sh
 echo kill rpcapture and R on local machine
-killall rpcapture R
+killall rpcapture R nodejs
 
 echo Killing digdar on red pitaya
 sshpass -p root ssh root@rp killall digdar
