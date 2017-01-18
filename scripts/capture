@@ -21,6 +21,11 @@ SAMPLING_RATE=125.000E6
 # the pushLiveImages.R script converts them to images, then moves the
 # raw file to the /radar_spool folder
 
+if [[ "$DATADIR" == "/radar_spool" ]]; then
+    print "Warning:  you don't really want DATADIR=/radar_spool;\nUsing DATADIR=/tmp/radar_sweeps instead"
+    DATADIR=""
+fi
+
 if [[ "$DATADIR" == "" ]]; then
     DATADIR=/tmp/radar_sweeps
 fi
@@ -164,7 +169,7 @@ mkdir $DATADIR
 /home/radar/capture/rpcapture -p $PULSES -P $PORT -d $DECIM -n $NUMSAMP -T $DATADIR 2>/tmp/rpcapturelog.txt &
 /home/radar/capture/pushLiveImages.R $REMOVE --incoming $DATADIR > /tmp/$LOGFILE 2>&1 &
 nodejs ./serveLatestImages.js &
-nohup /home/radar/capture/filer.R &
+nohup /home/radar/capture/filer.R >> /home/radar/capture/filer_log.txt 2>&1 &
 
 
 sleep 3
