@@ -2,8 +2,8 @@
 
 # for extra debugging output, add option -DDEBUG
 
-CPPOPTS=-std=c++11 -fPIC -O3
-COPTS=-fPIC -O3
+CPPOPTS=-std=c++11 -fPIC -O3 -g
+COPTS=-fPIC -O3 -g
 
 # debug version
 ## CPPOPTS=-std=c++11 -fPIC -g3 -DDEBUG

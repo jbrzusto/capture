@@ -16,6 +16,10 @@
 
 tmpDir = "/tmp"
 
+## spool folder for latest radar images
+
+spoolFolder = "/radar_spool/latest_images"
+
 ## desired pixels per metre
 ppm = 1.0 / 4.8
 
@@ -26,7 +30,7 @@ ppm = 1.0 / 4.8
 ## 3rd, 4th elts are Offset of NE corner of image from radar, in metres [N, E].
 ## Increasing these values shifts the coverage to the NE.
 
-## before 2015-11-26T12-39-00: 
+## before 2015-11-26T12-39-00:
 aziRangeOffsets = c(46.8,0,2200,500)
 
 ## Paul Bell's correction, which doesn't seem right: aziRangeOffsets = c(49.5,0,2200,500)
@@ -35,10 +39,7 @@ aziRangeOffsets = c(46.8,0,2200,500)
 scpDestUser = "force-radar@discovery"
 
 ## SCP Destination - folder on remote host to which images are pushed
-scpDestDir = "/home/www/html/htdocs/force/"
-
-## archiveScript - script on remote host for archiving uploaded image
-archiveScript = "/home/john/proj/force_radar_website/archive_image.py"
+scpDestDir = "spool"
 
 ## removal zone - range of azimuths to drop from image
 removal = NULL
@@ -51,8 +52,8 @@ while (length(argv) > 0) {
                 removal = as.numeric(strsplit(argv[2], ":")[[1]])
                 argv = argv[-(1:2)]
             },
-            "--filelist" = {
-                filelist = argv[2]
+            "--incoming" = {
+                INCOMING = argv[2]
                 argv = argv[-(1:2)]
             },
             {
@@ -60,7 +61,7 @@ while (length(argv) > 0) {
             }
             )
 }
-            
+
 ## -------------------- END OF USER OPTIONS --------------------
 
 ##
@@ -68,10 +69,11 @@ VELOCITY_OF_LIGHT = 2.99792458E8
 
 ## Desired image extents
 ##  xlim is east/west (negative = west)
-xlim = c(-6000, 0)
+#xlim = c(-6000, 0)
+xlim = c(-9000, 0)
 iwidth = round(diff(xlim) * ppm)
 ##  xlim is north/south (negative = south)
-ylim = c(-5775, 2182)
+ylim = c(-5775, 3182)
 iheight = round(diff(ylim) * ppm)
 
 ## desired azimuths
@@ -81,7 +83,7 @@ if (is.null(removal)) {
     desiredAzi = c(seq(from=0, to = removal[1], by = 1.0/3600), seq(from = removal[2], to = 1, by = 1.0/3600))
 } else {
     desiredAzi = seq(from=removal[2], to=removal[1], by=1.0 / 3600)
-}    
+}
 
 ## Pulses per sweep: a kludgy way to achieve a fixed number of pulses
 ##   per sweep, currently needed by the scan converter.  The
@@ -110,80 +112,82 @@ sk = 0
 
 pal = readRDS("/home/radar/capture/radarImagePalette.rds")  ## low-overhead read of palette, to allow changing dynamically
 options(digits=14)
-while (! file.exists(filelist) ) {
-    Sys.sleep(0.2)
-}
 
-fcon = file(filelist, "r")
+## start the inotifywait command, which will report events in the radar output directory
+
+evtCon = pipe(paste("/usr/bin/inotifywait -q -m -e close_write --format %f", INCOMING), "r")
 
 ni = 0
 while (TRUE) {
-  seek(fcon, where=seek(fcon, rw="r"), rw="r")
-  f = readLines(fcon, n=1)
-## e.g.  f="/media/FORCEradar9/2015-09-16/06/FORCEVC-2015-09-16T06-05-50.979752.dat"
-  if (length(f) == 0 || ! isTRUE(file.exists(f))) {
-      Sys.sleep(0.1)
-      next
-  }
-  con = file(f, "rb")
-  hdr = readLines(con, n=2)
+    while (TRUE) {
+        f = file.path(INCOMING, readLines(evtCon, n=1))
+        if (isTRUE(file.exists(f)))
+            break
+    }
 
-  if (hdr[1] != "DigDar radar sweep file") {
-      cat("Skipping bogus file ", f, "\n")
-      Sys.sleep(0.1)
-      close(con)
-      next
-  }
-  meta = fromJSON(hdr[2])
-  if (as.numeric(Sys.time()) - meta$ts0 > 60) {
-      close(con)
-      next
-  }
-  samplesPerPulse = meta$ns
-  samplingRate = meta$clock * 1e6
-  decimation = meta$decim
-  
-  ## metres per sample
-  mps = VELOCITY_OF_LIGHT / (samplingRate / decimation) / 2.0
+    con = file(f, "rb")
+    hdr = readLines(con, n=2)
 
-  x = data.frame(
-      clocks  = readBin(con, integer(), n = meta$np, size=4),
-      azi     = readBin(con, numeric(), n = meta$np, size=4),
-      trigs   = readBin(con, integer(), n = meta$np, size=4)
-      )
-  samples = readBin(con, raw(), n = meta$np * meta$ns * 2)
-  dim(samples) = c(meta$ns * 2, meta$np)
-  close(con)
+    if (hdr[1] != "DigDar radar sweep file") {
+        cat("Skipping bogus file ", f, "\n")
+        Sys.sleep(0.1)
+        close(con)
+        next
+    }
+    meta = fromJSON(hdr[2])
+    if (as.numeric(Sys.time()) - meta$ts0 > 60) {
+        close(con)
+        next
+    }
+    samplesPerPulse = meta$ns
+    samplingRate = meta$clock * 1e6
+    decimation = meta$decim
 
-  ## get pulses uniformly spread around circle
+    ## metres per sample
+    mps = VELOCITY_OF_LIGHT / (samplingRate / decimation) / 2.0
 
-  keep = approx(x$azi,1:nrow(x),desiredAzi, method="constant", rule=2)$y
-  
-  x = x[keep,] ## pulses are rows
-  samples = samples[,keep] ## yes, different index slot than previous line: pulses are columns
-  
-  ## output timestamp of last pulse, and azi/range offsets
-  metaCon = file(file.path(tmpDir, "FORCERadarSweepMetadata.txt"), "w")
-  cat(sprintf("{\n  \"ts\": %.3f,\n  \"samplesPerPulse\": %d,\n  \"pulsesPerSweep\": %d,\n  \"width\": %d,\n   \"height\": %d,\n  \"xlim\": [%f, %f],\n   \"ylim\": [%f, %f],\n  \"ppm\": %f,\n \"aziOffset\": %f,\n  \"rangeOffset\": %f,\n  \"samplingRate\": %f\n}", meta$ts0, samplesPerPulse, pulsesPerSweep, iwidth, iheight, xlim[1], xlim[2], ylim[1], ylim[2], ppm, aziRangeOffsets[1], aziRangeOffsets[2], samplingRate / decimation ), file=metaCon)
-  close(metaCon)
+    x = data.frame(
+        clocks  = readBin(con, integer(), n = meta$np, size=4),
+        azi     = readBin(con, numeric(), n = meta$np, size=4),
+        trigs   = readBin(con, integer(), n = meta$np, size=4)
+    )
+    samples = readBin(con, raw(), n = meta$np * meta$ns * 2)
+    dim(samples) = c(meta$ns * 2, meta$np)
+    close(con)
+    rm(con)
+    ## move the file to the spool folder, from where it will get filed
+    cat(f, (file.rename(f, file.path("/radar_spool", basename(f)))), "\n")
 
-  ## if necessary, regenerate scan converter
-  if (is.null(scanConv)) {
-    
-      scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, iwidth, iheight, 0, 0, iwidth, ylim[2] * ppm, TRUE)), c(ppm * mps, aziRangeOffsets[2] , aziRangeOffsets[1]/360+desiredAzi[1], aziRangeOffsets[1]/360+tail(desiredAzi,1)))
-  }
+    ## get pulses uniformly spread around circle
 
-  .Call("apply_scan_converter", scanConv, samples, pix, pal, as.integer(c(iwidth, 8192*decimation, 0.5 + decimation * (16383-8192) / 255)))
+    keep = approx(x$azi,1:nrow(x),desiredAzi, method="constant", rule=2)$y
 
-  ## Note: write PNG to newFORCERadarImage.png, then rename to currentFORCERadarImage.png so that
-  ##
-  jpgFile = file(file.path(tmpDir, "currentFORCERadarImage.jpg"), "wb")
-  writeJPEG(pix, jpgFile, quality=0.5, bg="black")
-  close(jpgFile)
-  ## Copy file to server, then rename 'current' to plain version; this
-  ## is done atomically, so that if the web server process is serving
-  ## the file, it serves either the complete previous image, or the
-  ## complete new image, rather than a partial or corrupt image.
- system(sprintf("scp -q %s/currentFORCERadarImage.jpg %s/FORCERadarSweepMetadata.txt %s:%s; ssh %s '%s'", tmpDir, tmpDir, scpDestUser, scpDestDir, scpDestUser, archiveScript), wait=TRUE)
+    x = x[keep,] ## pulses are rows
+    samples = samples[,keep] ## yes, different index slot than previous line: pulses are columns
+
+    ## output timestamp of last pulse, and azi/range offsets
+    metaCon = file(file.path(tmpDir, "FORCERadarSweepMetadata.txt"), "w")
+    cat(sprintf("{\n  \"ts\": %.3f,\n  \"samplesPerPulse\": %d,\n  \"pulsesPerSweep\": %d,\n  \"width\": %d,\n   \"height\": %d,\n  \"xlim\": [%f, %f],\n   \"ylim\": [%f, %f],\n  \"ppm\": %f,\n \"aziOffset\": %f,\n  \"rangeOffset\": %f,\n  \"samplingRate\": %f\n}", meta$ts0, samplesPerPulse, pulsesPerSweep, iwidth, iheight, xlim[1], xlim[2], ylim[1], ylim[2], ppm, aziRangeOffsets[1], aziRangeOffsets[2], samplingRate / decimation ), file=metaCon)
+    close(metaCon)
+
+    ## if necessary, regenerate scan converter
+    if (is.null(scanConv)) {
+
+        scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, iwidth, iheight, 0, 0, iwidth, ylim[2] * ppm, TRUE)), c(ppm * mps, aziRangeOffsets[2] , aziRangeOffsets[1]/360+desiredAzi[1], aziRangeOffsets[1]/360+tail(desiredAzi,1)))
+    }
+
+    .Call("apply_scan_converter", scanConv, samples, pix, pal, as.integer(c(iwidth, 8192*decimation, 0.5 + decimation * (16383-8192) / 255)))
+
+    jpgName = file.path(tmpDir, sub("dat$", "jpg", basename(f)))
+    jpgFile = file(jpgName, "wb")
+    writeJPEG(pix, jpgFile, quality=0.5, bg="black")
+    close(jpgFile)
+
+    ## make hardlink in spoolFolder, which must be on same drive
+    file.link(jpgName, file.path(spoolFolder, basename(jpgName)))
+
+    ## Copy file to discovery.
+
+    system(sprintf("scp -oControlMaster=auto -oControlPath=/tmp/tunnel2 -q %s %s/FORCERadarSweepMetadata.txt %s:%s; /bin/rm -f %s", jpgName, tmpDir, scpDestUser, scpDestDir, jpgName), wait=FALSE)
+
 }
-

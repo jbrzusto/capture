@@ -16,17 +16,18 @@ PORT=12345
 # sampling rate of the digdar digitizer
 SAMPLING_RATE=125.000E6
 
-# set the output directory, if not already
+# set the output directory, defaulting to /tmp
+# the rpcapture program writes files to that directory, but
+# the pushLiveImages.R script converts them to images, then moves the
+# raw file to the /radar_spool folder
+
+if [[ "$DATADIR" == "/radar_spool" ]]; then
+    print "Warning:  you don't really want DATADIR=/radar_spool;\nUsing DATADIR=/tmp/radar_sweeps instead"
+    DATADIR=""
+fi
+
 if [[ "$DATADIR" == "" ]]; then
-    if [[ -d /media/FORCE_radar_1 ]]; then
-        DATADIR=/media/FORCE_radar_1
-    elif [[ -d /media/FORCE_radar_2 ]]; then
-        DATADIR=/media/FORCE_radar_2
-    elif [[ -d /home/radar/data ]]; then
-        DATADIR=/home/radar/data
-    else
-        DATADIR=.
-    fi
+    DATADIR=/tmp/radar_sweeps
 fi
 
 # filename template
@@ -164,8 +165,12 @@ fi
 # Listen on port PORT for raw pulse data from the redpitaya digitizer, record it as sweep files
 # and upload raw images from these.
 
-/home/radar/capture/rpcapture -p $PULSES -P $PORT -d $DECIM -n $NUMSAMP -T $DATADIR -L /tmp/rpcapturefilelist.txt 2>/tmp/rpcapturelog.txt &
-/home/radar/capture/pushLiveImages.R $REMOVE --filelist /tmp/rpcapturefilelist.txt > $DATADIR/$LOGFILE 2>&1 &
+mkdir $DATADIR
+/home/radar/capture/scripts/rpcapture.sh -p $PULSES -P $PORT -d $DECIM -n $NUMSAMP -T $DATADIR &
+/home/radar/capture/pushLiveImages.R $REMOVE --incoming $DATADIR > /tmp/$LOGFILE 2>&1 &
+nodejs ./serveLatestImages.js &
+nohup /home/radar/capture/filer.R >> /home/radar/capture/filer_log.txt 2>&1 &
+
 
 sleep 3
 
@@ -177,7 +182,5 @@ sshpass -p root ssh -o ControlMaster=no -o ControlPath=none root@$DIGDARHOST dat
 
 # start the digdar digitizing process on the redpitaya
 
-echo On redpitaya, will do /opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNK_SIZE $USE_SUM $REMOVE -t $LOCALHOST:$PORT 
+echo On redpitaya, will do /opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNK_SIZE $USE_SUM $REMOVE -t $LOCALHOST:$PORT
 sshpass -p root ssh -o ControlMaster=no -o ControlPath=none -f -n root@$DIGDARHOST "/opt/bin/digdar -d $DECIM -n $NUMSAMP -p $PULSES -c $CHUNK_SIZE $USE_SUM $REMOVE -t $LOCALHOST:$PORT 2>/tmp/digdarlog.txt&"
-
-

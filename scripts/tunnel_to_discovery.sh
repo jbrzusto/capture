@@ -9,7 +9,7 @@
 # first, check whether there is already a tunnel open, by logging
 # in remotely to discovery, then tunneling back to grab the hostname
 
-resp=`ssh force-radar@discovery ssh -p 30022 radar@localhost cat /hostname.txt`
+resp=`ssh -oControlMaster=auto -oControlPath=/tmp/tunnel2 force-radar@discovery ssh -p 30022 radar@localhost cat /hostname.txt`
 
 # if the tunnel is working, then $resp should be `cat /hostname.txt`:
 
@@ -23,4 +23,4 @@ killall -KILL ssh
 
 # tunnel port 30022 on discovery back to this hosts's ssh port
 
-ssh -N -f -R localhost:30022:localhost:22 force-radar@discovery
+ssh -oControlMaster=yes -oControlPath=/tmp/tunnel2 -oControlPersist=1000 -N -f -R localhost:30022:localhost:22 force-radar@discovery
