@@ -23,27 +23,8 @@ SWEEP_FILE_REGEX = "\\.dat$"
 ## 12 GB should cover 1 hour.
 FREE_THRESH = 12e9
 
-## if user specifes --old, we only archive existing files
-## from spool folder.  If user specifies --new, we only archive newly-arrived
-## files from the spool folder
 
 ARGV = commandArgs(TRUE)
-oldOnly = FALSE
-newOnly = FALSE
-
-while(length(ARGV) > 0) {
-    if (ARGV[1] == "--old") {
-        oldOnly = TRUE
-        ARGV = ARGV[-1]
-    } else if (ARGV[1] == "--new") {
-        newOnly = TRUE
-        ARGV = ARGV[-1]
-    }
-}
-
-if (oldOnly && newOnly) {
-    stop("You must specify at most one of --old and --new.")
-}
 
 ## get the drives used for storage
 drives = dir(RADAR_STORE, full.names=TRUE, pattern="^sd.*$")
@@ -65,11 +46,16 @@ hours = hours[order(hours$dateHour),]
 ##
 ## FIXME: watch storage directory for addition of new mounts
 
-if (! oldOnly) {
-    evtCon = pipe(paste("/usr/bin/inotifywait -q -m -e moved_to --format %w,%f,%e", RADAR_SPOOL), "r")
-} else {
-    evtCon = NULL
-}
+## each file moved to the RADAR_SPOOL folder generates an event, which inotifywait
+## writes to a fifo.  We open that fifo with blocking=FALSE so we can check for
+## new files while also archiving existing files
+
+FIFO = "/tmp/new_sweep"
+
+system("mkfifo /tmp/new_sweep")
+system(paste("/usr/bin/inotifywait -q -m -e moved_to --format %w,%f,%e", RADAR_SPOOL, ">", FIFO), wait=FALSE)
+
+evtCon = fifo(FIFO, "r", blocking=FALSE)
 
 ## get list of files already in spool directory
 
@@ -100,74 +86,79 @@ getFreeSpace = function() {
 fsCheckAt = 100L
 fsCheckCounter = fsCheckAt
 
-## allow up to 2 existing spool file moves for each new one added
-existingFileMoveMax = if (newOnly) 0 else 2L
-existingFileMoveCount = existingFileMoveMax
+## main loop; it checks for new files, archives an old file (if there
+## are any), sometimes checks for free space on destination storage
+## If there's nothing to do, it sleeps 100ms
 
 while (TRUE) {
-    if (fsCheckCounter == fsCheckAt) {
-        free = getFreeSpace()
-        while (sum(free) < FREE_THRESH) {
-            ## delete files from oldest hour
-            system(paste("rm -rf", hours$path[1]))
-            hours = hours[-1,]
+    tryCatch({
+        if (fsCheckCounter == fsCheckAt) {
             free = getFreeSpace()
-        }
-        fsCheckCounter = 0L
-        curDrive = drives[which.max(free)]
-    }
-    if (length(spoolFiles) > 0L && (oldOnly || existingFileMoveCount > 0L)) {
-        evt = c(RADAR_SPOOL, spoolFiles[1], "EXISTING")
-        spoolFiles = spoolFiles[-1]
-        existingFileMoveCount = existingFileMoveCount - 1L
-    } else if (! oldOnly) {
-        repeat {
-            evt = strsplit(readLines(evtCon, n=1), ",")[[1]]
-            if (! is.na(evt[2]) && ! isTRUE(evt[5]=="ISDIR"))
-                break
-            Sys.sleep(0.1)
-        }
-    }
-    fn = evt[2]
-    if (is.na(fn))
-        next
-    from = file.path(RADAR_SPOOL, fn)
-
-    if (isTRUE(file.info(from)$isdir))
-        next
-
-    if (evt[1] == RADAR_SPOOL) {
-        if (evt[3] == "EXISTING" || evt[3] == "MOVED_TO") {
-            ## new file, so move it to the appropriate location
-            ## we are guaranteed by preceding code to have space
-            ## for it
-
-            parts = strsplit(fn, "[-T]", perl=TRUE)[[1]]
-
-            ## parts looks like:
-            ##    [1] "FORCEVC"       "2015"          "11"            "04"
-            ##    [5] "03"            "02"            "54.169557.dat"
-
-            dateHour = sprintf("%s-%s-%s/%s", parts[2], parts[3], parts[4], parts[5])
-
-            path = file.path(curDrive, dateHour)
-
-            if (! path %in% hours$path) {
-                dir.create(path, recursive=TRUE)
-                hours = rbind(hours, data.frame(path = I(path), dateHour=I(dateHour)))
+            while (sum(free) < FREE_THRESH) {
+                ## delete files from oldest hour
+                system(paste("rm -rf", hours$path[1]))
+                hours = hours[-1,]
+                free = getFreeSpace()
             }
-
-            ## compress the file to a new location in storage
-            cmd = sprintf("gzip -c '%s' > '%s.gz'; /bin/rm -f '%s'",
-                          from,
-                          file.path(path, fn),
-                          from)
-            system(cmd, wait=FALSE)
-
-            fsCheckCounter = fsCheckCounter + 1L
-            if (evt[3] != "EXISTING") {
-	        existingFileMoveCount = existingFileMoveMax
-	    }
+            fsCheckCounter = 0L
+            curDrive = drives[which.max(free)]
         }
-    }
+        evt = NULL
+        ## see whether there's a new file in the FIFO
+        a = readLines(evtCon, 1)
+        if (length(a) > 0) {
+            e = strsplit(a, ",")[[1]]
+            if (! is.na(e[2]) && ! isTRUE(e[5]=="ISDIR"))
+                evt = e
+        }
+        ## if no new file, check for an existing file
+        if (is.null(evt)) {
+            if (length(spoolFiles) > 0L) {
+                evt = c(RADAR_SPOOL, spoolFiles[1], "EXISTING")
+                spoolFiles = spoolFiles[-1]
+            }
+        }
+        if (is.null(evt)) {
+            ## still nothing, sleep a bit then retry
+            Sys.sleep(0.1)
+            next
+        }
+        fn = evt[2]
+        from = file.path(RADAR_SPOOL, fn)
+
+        if (evt[1] == RADAR_SPOOL) {
+            if (evt[3] == "EXISTING" || evt[3] == "MOVED_TO") {
+                ## new file, so move it to the appropriate location
+                ## we are guaranteed by preceding code to have space
+                ## for it
+
+                parts = strsplit(fn, "[-T]", perl=TRUE)[[1]]
+
+                ## parts looks like:
+                ##    [1] "FORCEVC"       "2015"          "11"            "04"
+                ##    [5] "03"            "02"            "54.169557.dat"
+
+                dateHour = sprintf("%s-%s-%s/%s", parts[2], parts[3], parts[4], parts[5])
+
+                path = file.path(curDrive, dateHour)
+
+                if (! path %in% hours$path) {
+                    dir.create(path, recursive=TRUE)
+                    hours = rbind(hours, data.frame(path = I(path), dateHour=I(dateHour)))
+                }
+
+                ## compress the file to a new location in storage
+                cmd = sprintf("gzip -c '%s' > '%s.gz'; /bin/rm -f '%s'",
+                              from,
+                              file.path(path, fn),
+                              from)
+                system(cmd, wait=FALSE)
+                cat(fn, "\n")
+                fsCheckCounter = fsCheckCounter + 1L
+            }
+        }
+    }, error=function(e) {
+        cat(as.character(e), "\n")
+        Sys.sleep(1)
+    })
 }
