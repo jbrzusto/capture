@@ -158,36 +158,38 @@ while (TRUE) {
     ## move the file to the spool folder, from where it will get filed
     cat(f, (file.rename(f, file.path("/radar_spool", basename(f)))), "\n")
 
-    ## get pulses uniformly spread around circle
+    tryCatch({
+        ## get pulses uniformly spread around circle
 
-    keep = approx(x$azi,1:nrow(x),desiredAzi, method="constant", rule=2)$y
+        keep = approx(x$azi,1:nrow(x),desiredAzi, method="constant", rule=2)$y
 
-    x = x[keep,] ## pulses are rows
-    samples = samples[,keep] ## yes, different index slot than previous line: pulses are columns
+        x = x[keep,] ## pulses are rows
+        samples = samples[,keep] ## yes, different index slot than previous line: pulses are columns
 
-    ## output timestamp of last pulse, and azi/range offsets
-    metaCon = file(file.path(tmpDir, "FORCERadarSweepMetadata.txt"), "w")
-    cat(sprintf("{\n  \"ts\": %.3f,\n  \"samplesPerPulse\": %d,\n  \"pulsesPerSweep\": %d,\n  \"width\": %d,\n   \"height\": %d,\n  \"xlim\": [%f, %f],\n   \"ylim\": [%f, %f],\n  \"ppm\": %f,\n \"aziOffset\": %f,\n  \"rangeOffset\": %f,\n  \"samplingRate\": %f\n}", meta$ts0, samplesPerPulse, pulsesPerSweep, iwidth, iheight, xlim[1], xlim[2], ylim[1], ylim[2], ppm, aziRangeOffsets[1], aziRangeOffsets[2], samplingRate / decimation ), file=metaCon)
-    close(metaCon)
+        ## output timestamp of last pulse, and azi/range offsets
+        metaCon = file(file.path(tmpDir, "FORCERadarSweepMetadata.txt"), "w")
+        cat(sprintf("{\n  \"ts\": %.3f,\n  \"samplesPerPulse\": %d,\n  \"pulsesPerSweep\": %d,\n  \"width\": %d,\n   \"height\": %d,\n  \"xlim\": [%f, %f],\n   \"ylim\": [%f, %f],\n  \"ppm\": %f,\n \"aziOffset\": %f,\n  \"rangeOffset\": %f,\n  \"samplingRate\": %f\n}", meta$ts0, samplesPerPulse, pulsesPerSweep, iwidth, iheight, xlim[1], xlim[2], ylim[1], ylim[2], ppm, aziRangeOffsets[1], aziRangeOffsets[2], samplingRate / decimation ), file=metaCon)
+        close(metaCon)
 
-    ## if necessary, regenerate scan converter
-    if (is.null(scanConv)) {
+        ## if necessary, regenerate scan converter
+        if (is.null(scanConv)) {
 
-        scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, iwidth, iheight, 0, 0, iwidth, ylim[2] * ppm, TRUE)), c(ppm * mps, aziRangeOffsets[2] , aziRangeOffsets[1]/360+desiredAzi[1], aziRangeOffsets[1]/360+tail(desiredAzi,1)))
-    }
+            scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, samplesPerPulse, iwidth, iheight, 0, 0, iwidth, ylim[2] * ppm, TRUE)), c(ppm * mps, aziRangeOffsets[2] , aziRangeOffsets[1]/360+desiredAzi[1], aziRangeOffsets[1]/360+tail(desiredAzi,1)))
+        }
 
-    .Call("apply_scan_converter", scanConv, samples, pix, pal, as.integer(c(iwidth, 8192*decimation, 0.5 + decimation * (16383-8192) / 255)))
+        .Call("apply_scan_converter", scanConv, samples, pix, pal, as.integer(c(iwidth, 8192*decimation, 0.5 + decimation * (16383-8192) / 255)))
 
-    jpgName = file.path(tmpDir, sub("dat$", "jpg", basename(f)))
-    jpgFile = file(jpgName, "wb")
-    writeJPEG(pix, jpgFile, quality=0.5, bg="black")
-    close(jpgFile)
+        jpgName = file.path(tmpDir, sub("dat$", "jpg", basename(f)))
+        jpgFile = file(jpgName, "wb")
+        writeJPEG(pix, jpgFile, quality=0.5, bg="black")
+        close(jpgFile)
 
-    ## make hardlink in spoolFolder, which must be on same drive
-    file.link(jpgName, file.path(spoolFolder, basename(jpgName)))
+        ## make hardlink in spoolFolder, which must be on same drive
+        file.link(jpgName, file.path(spoolFolder, basename(jpgName)))
 
-    ## Copy file to discovery.
+        ## Copy file to discovery.
 
-    system(sprintf("scp -oControlMaster=auto -oControlPath=/tmp/tunnel2 -q %s %s/FORCERadarSweepMetadata.txt %s:%s; /bin/rm -f %s", jpgName, tmpDir, scpDestUser, scpDestDir, jpgName), wait=FALSE)
-
+        system(sprintf("scp -oControlMaster=auto -oControlPath=/tmp/tunnel2 -q %s %s/FORCERadarSweepMetadata.txt %s:%s; /bin/rm -f %s", jpgName, tmpDir, scpDestUser, scpDestDir, jpgName), wait=FALSE)
+    }, error=function(e) print(e)
+    )
 }
