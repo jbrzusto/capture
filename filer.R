@@ -6,12 +6,22 @@
 
 ## directory where radar sweeps are written by the capture program
 ## NB: *must* include trailing '/'
-RADAR_SPOOL = "/radar_spool/"
+ARGV = commandArgs(TRUE)
+
+if (length(ARGV) > 0) {
+    RADAR_SPOOL = ARGV[1]
+} else {
+    RADAR_SPOOL = "/radar_spool/"
+}
 
 ## directory where ongoing radar storage is mounted
 ## each disk is mounted in a subfolder, then sweeps are stored
 ## in subfolders two levels down with paths %Y-%m-%d/%H
-RADAR_STORE = "/mnt/radar_storage"
+if (length(ARGV) > 1) {
+    RADAR_STORE = ARGV[2]
+} else {
+    RADAR_STORE = "/mnt/radar_storage"
+}
 
 ## regex matching sweep files
 SWEEP_FILE_REGEX = "\\.dat$"
@@ -22,9 +32,6 @@ SWEEP_FILE_REGEX = "\\.dat$"
 ## rises above this threshold.
 ## 12 GB should cover 1 hour.
 FREE_THRESH = 12e9
-
-
-ARGV = commandArgs(TRUE)
 
 ## get the drives used for storage
 drives = dir(RADAR_STORE, full.names=TRUE, pattern="^sd.*$")
@@ -50,7 +57,7 @@ hours = hours[order(hours$dateHour),]
 ## writes to a fifo.  We open that fifo with blocking=FALSE so we can check for
 ## new files while also archiving existing files
 
-FIFO = "/tmp/new_sweep"
+FIFO = paste0("/tmp/new_sweep_", basename(RADAR_SPOOL))
 
 system("mkfifo /tmp/new_sweep")
 system(paste("/usr/bin/inotifywait -q -m -e moved_to --format %w,%f,%e", RADAR_SPOOL, ">", FIFO), wait=FALSE)
@@ -127,7 +134,7 @@ while (TRUE) {
         from = file.path(RADAR_SPOOL, fn)
 
         if (evt[1] == RADAR_SPOOL) {
-            if (evt[3] == "EXISTING" || evt[3] == "MOVED_TO") {
+            if (isTRUE(evt[3] == "EXISTING" || evt[3] == "MOVED_TO")) {
                 ## new file, so move it to the appropriate location
                 ## we are guaranteed by preceding code to have space
                 ## for it

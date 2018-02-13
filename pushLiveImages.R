@@ -46,6 +46,20 @@ removal = NULL
 
 argv = commandArgs(TRUE)
 
+## should we ignore timestamps in moving files?
+## normally we don't move files older than a minute.
+## but why?
+
+IGNORE_TS = FALSE
+
+## push existing images, in case sending failed?
+
+EXISTING_ONLY = FALSE
+
+## only spool images, don't push them to discovery
+
+SPOOL_ONLY = FALSE
+
 while (length(argv) > 0) {
     switch (argv[1],
             "--remove" = {
@@ -55,6 +69,18 @@ while (length(argv) > 0) {
             "--incoming" = {
                 INCOMING = argv[2]
                 argv = argv[-(1:2)]
+            },
+            "--ignore_ts" = {
+                IGNORE_TS = TRUE
+                argv = argv[-1]
+            },
+            "--existing_only" = {
+                EXISTING_ONLY = TRUE
+                argv = argv[-1]
+            },
+            "--spool_only" = {
+                SPOOL_ONLY = TRUE
+                argv = argv[-1]
             },
             {
                 stop("Unknown option", argv[1])
@@ -115,7 +141,11 @@ options(digits=14)
 
 ## start the inotifywait command, which will report events in the radar output directory
 
-evtCon = pipe(paste("/usr/bin/inotifywait -q -m -e close_write --format %f", INCOMING), "r")
+if (EXISTING_ONLY) {
+    evtCon = pipe(sprintf("cd %s; find . -maxdepth 1 -type f -printf '%%f\n'", INCOMING), "r")
+} else {
+    evtCon = pipe(paste("/usr/bin/inotifywait -q -m -e close_write,moved_to --format %f", INCOMING), "r")
+}
 
 ni = 0
 while (TRUE) {
@@ -125,40 +155,41 @@ while (TRUE) {
             break
     }
 
-    con = file(f, "rb")
-    hdr = readLines(con, n=2)
-
-    if (hdr[1] != "DigDar radar sweep file") {
-        cat("Skipping bogus file ", f, "\n")
-        Sys.sleep(0.1)
-        close(con)
-        next
-    }
-    meta = fromJSON(hdr[2])
-    if (as.numeric(Sys.time()) - meta$ts0 > 60) {
-        close(con)
-        next
-    }
-    samplesPerPulse = meta$ns
-    samplingRate = meta$clock * 1e6
-    decimation = meta$decim
-
-    ## metres per sample
-    mps = VELOCITY_OF_LIGHT / (samplingRate / decimation) / 2.0
-
-    x = data.frame(
-        clocks  = readBin(con, integer(), n = meta$np, size=4),
-        azi     = readBin(con, numeric(), n = meta$np, size=4),
-        trigs   = readBin(con, integer(), n = meta$np, size=4)
-    )
-    samples = readBin(con, raw(), n = meta$np * meta$ns * 2)
-    dim(samples) = c(meta$ns * 2, meta$np)
-    close(con)
-    rm(con)
-    ## move the file to the spool folder, from where it will get filed
-    cat(f, (file.rename(f, file.path("/radar_spool", basename(f)))), "\n")
-
     tryCatch({
+        con = file(f, "rb")
+        hdr = readLines(con, n=2)
+
+        if (!isTRUE(hdr[1] == "DigDar radar sweep file")) {
+            cat("Skipping bogus file ", f, "\n")
+            Sys.sleep(0.1)
+            close(con)
+            next
+        }
+        meta = fromJSON(hdr[2])
+        if (! IGNORE_TS && as.numeric(Sys.time()) - meta$ts0 > 60) {
+            close(con)
+            next
+        }
+        samplesPerPulse = meta$ns
+        samplingRate = meta$clock * 1e6
+        decimation = meta$decim
+
+        ## metres per sample
+        mps = VELOCITY_OF_LIGHT / (samplingRate / decimation) / 2.0
+
+        x = data.frame(
+            clocks  = readBin(con, integer(), n = meta$np, size=4),
+            azi     = readBin(con, numeric(), n = meta$np, size=4),
+            trigs   = readBin(con, integer(), n = meta$np, size=4)
+        )
+        samples = readBin(con, raw(), n = meta$np * meta$ns * 2)
+        dim(samples) = c(meta$ns * 2, meta$np)
+        close(con)
+        rm(con)
+        ## move the file to the spool folder, from where it will get filed
+
+        cat(f, system(sprintf = ("mv %s %s", f, file.path("/radar_spool", basename(f)))), "\n")
+
         ## get pulses uniformly spread around circle
 
         keep = approx(x$azi,1:nrow(x),desiredAzi, method="constant", rule=2)$y
@@ -188,8 +219,9 @@ while (TRUE) {
         file.link(jpgName, file.path(spoolFolder, basename(jpgName)))
 
         ## Copy file to discovery.
-
-        system(sprintf("scp -oControlMaster=auto -oControlPath=/tmp/tunnel2 -q %s %s/FORCERadarSweepMetadata.txt %s:%s; /bin/rm -f %s", jpgName, tmpDir, scpDestUser, scpDestDir, jpgName), wait=FALSE)
+        if (! SPOOL_ONLY) {
+            system(sprintf("scp -oControlMaster=auto -oControlPath=/tmp/tunnel2 -q %s %s/FORCERadarSweepMetadata.txt %s:%s; /bin/rm -f %s", jpgName, tmpDir, scpDestUser, scpDestDir, jpgName), wait=FALSE)
+        }
     }, error=function(e) print(e)
     )
 }
