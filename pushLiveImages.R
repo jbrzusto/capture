@@ -14,7 +14,7 @@
 
 ## each option can be replaced by a value specified on the command line
 
-tmpDir = "/tmp"
+tmpDir = "/tmp/radar_temp"
 
 ## spool folder for latest radar images
 
@@ -150,9 +150,17 @@ if (EXISTING_ONLY) {
 ni = 0
 while (TRUE) {
     while (TRUE) {
-        f = file.path(INCOMING, readLines(evtCon, n=1))
-        if (isTRUE(file.exists(f)))
-            break
+	line = readLines(evtCon, n=1)
+	if (length(line) == 0) {
+	    if (EXISTING_ONLY) {
+               quit("no")
+            }
+        } else {
+            f = file.path(INCOMING, line)
+            if (isTRUE(file.exists(f)))
+                break
+        }
+        Sys.sleep(0.2)
     }
 
     tryCatch({
@@ -188,7 +196,7 @@ while (TRUE) {
         rm(con)
         ## move the file to the spool folder, from where it will get filed
 
-        cat(f, system(sprintf = ("mv %s %s", f, file.path("/radar_spool", basename(f)))), "\n")
+        cat(f, system(sprintf("mv %s %s", f, file.path("/radar_spool", basename(f)))), "\n")
 
         ## get pulses uniformly spread around circle
 
