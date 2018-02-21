@@ -22,7 +22,7 @@ SAMPLING_RATE=125.000E6
 # raw file to the /radar_spool folder
 
 if [[ "$DATADIR" == "/radar_spool" ]]; then
-    print "Warning:  you don't really want DATADIR=/radar_spool;\nUsing DATADIR=/radar_sweeps instead"
+    printf "Warning:  you don't really want DATADIR=/radar_spool;\nUsing DATADIR=/radar_sweeps instead\n"
     DATADIR=""
 fi
 
