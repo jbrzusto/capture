@@ -14,7 +14,7 @@
 
 ## each option can be replaced by a value specified on the command line
 
-tmpDir = "/tmp/radar_temp"
+tmpDir = "/radar_temp"
 
 ## spool folder for latest radar images
 
