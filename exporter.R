@@ -114,7 +114,7 @@ startHour = format(start, "%Y-%m-%d/%H")
 
 sourceFolder = hours$path[startHour==hours$dateHour]
 
-if (is.na(sourceFolder)) {
+if (length(sourceFolder) == 0 || is.na(sourceFolder)) {
     stop("Couldn't find data starting at", start)
 }
 
