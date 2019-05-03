@@ -23,4 +23,4 @@ killall -KILL ssh
 
 # tunnel port 30022 on discovery back to this hosts's ssh port
 
-ssh -oControlMaster=yes -oControlPath=/tmp/tunnel2 -oControlPersist=1000 -N -f -R localhost:30022:localhost:22 force-radar@discovery
+ssh -oControlMaster=auto -oControlPath=/tmp/tunnel2 -oControlPersist=1000 -N -f -R localhost:30022:localhost:22 force-radar@discovery

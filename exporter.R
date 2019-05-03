@@ -18,8 +18,10 @@ M = 15
 #SLEN = 10
 SLEN = 5
 
-## destination user, host, address folder for .pol files
-SCP_DEST = "radar_upload@force:data"
+## template for copying .pol and .jpg files, ensuring remote dir is created
+scpCommandTemplate = "bzip2 -9 %s && \
+    (ssh -p 30022 -oControlMaster=auto -oControlPath=/tmp/ssh.force radar@radarcam.ca mkdir /volume1/all/radar/fvc/pol/%s;\
+scp -P 30022 -oControlMaster=auto -oControlPath=/tmp/ssh.force %s* radar@radarcam.ca:/volume1/all/radar/fvc/pol/%s)"
 
 ###########################################################################
 ##
@@ -155,7 +157,7 @@ for(i in seq(along=useFiles)) {
     samplesPerPulse = meta$ns
     samplingRate = meta$clock * 1e6
     decimation = meta$decim
-  
+
     ## metres per sample
     mps = VELOCITY_OF_LIGHT / (samplingRate / decimation) / 2.0
 
@@ -174,10 +176,10 @@ for(i in seq(along=useFiles)) {
         ## create a summary image from this sweep
         x = sweeps[[1]]
         dim(x$samples) = c(meta$ns * 2, meta$np)
-        
+
         samplingRate = meta$clock * 1e6
         decimation = meta$decim
-        
+
         ## metres per sample
         mps = VELOCITY_OF_LIGHT / (samplingRate / decimation) / 2.0
 
@@ -195,13 +197,13 @@ for(i in seq(along=useFiles)) {
         pulsesPerSweep = length(desiredAzi)
 
         ## get pulses uniformly spread around circle
-        
+
         keep = approx(x$azi, seq(along=x$azi), desiredAzi, method="constant", rule=2)$y
-        
+
         x$samples = x$samples[,keep]
-        
+
         scanConv = .Call("make_scan_converter", as.integer(c(pulsesPerSweep, meta$ns, iwidth, iheight, 0, 0, iwidth, ylim[2] * ppm, TRUE)), c(ppm * mps, aziRangeOffsets[2] , aziRangeOffsets[1]/360+desiredAzi[1], aziRangeOffsets[1]/360+tail(desiredAzi,1)))
-    
+
         .Call("apply_scan_converter", scanConv, x$samples, pix, pal, as.integer(c(iwidth, 8192 * decimation, 0.5 + decimation * (16383 - 8192) / 255)))
     }
 }
@@ -223,9 +225,13 @@ writeJPEG(pix, jpgFile, quality=0.5, bg="black")
 bzName = paste(outname, ".bz2", sep="")
 
 ## compress file; copy to FORCE workstation; delete
-system(paste("bzip2 -9", outname, "; if ( scp -oControlMaster=no -oControlPath=none -i ~/.ssh/id_dsa_vc_radar_laptop", paste(outnameStem, "*", sep=""), SCP_DEST, ") then", "rm -f", paste(outnameStem, "*", sep=""), "; fi "))
+#system(paste("bzip2 -9", outname, "; if ( scp -oControlMaster=no -oControlPath=none -i ~/.ssh/id_dsa_vc_radar_laptop", paste(outnameStem, "*", sep=""), SCP_DEST, ") then", "rm -f", paste(outnameStem, "*", sep=""), "; fi "))
 
-
-
-
-
+u = regexpr("(2[0-9]{3}[0-9]{2}[0-9]{2})", outname)
+dateString = substring(outname, u, u+7)
+if (0 == system(sprintf(scpCommandTemplate, outname, ## compress .pol file \
+                        dateString, ## make remote dir
+                        outnameStem, dateString ## copy jpg and pol files,
+                        ))) {
+    file.remove(bzName)
+}

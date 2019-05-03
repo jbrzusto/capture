@@ -59,7 +59,7 @@ hours = hours[order(hours$dateHour),]
 
 FIFO = paste0("/tmp/new_sweep_", basename(RADAR_SPOOL))
 
-system("mkfifo /tmp/new_sweep")
+system(paste("mkfifo ", FIFO))
 system(paste("/usr/bin/inotifywait -q -m -e moved_to --format %w,%f,%e", RADAR_SPOOL, ">", FIFO), wait=FALSE)
 
 evtCon = fifo(FIFO, "r", blocking=FALSE)
@@ -127,7 +127,7 @@ while (TRUE) {
         }
         if (is.null(evt)) {
             ## still nothing, sleep a bit then retry
-            Sys.sleep(0.1)
+            Sys.sleep(0.01)
             next
         }
         fn = evt[2]

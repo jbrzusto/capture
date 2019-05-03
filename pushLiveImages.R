@@ -35,11 +35,10 @@ aziRangeOffsets = c(46.8,0,2200,500)
 
 ## Paul Bell's correction, which doesn't seem right: aziRangeOffsets = c(49.5,0,2200,500)
 
-## SCP Destination User / Host to which images are pushed via secure copy
-scpDestUser = "force-radar@discovery"
-
-## SCP Destination - folder on remote host to which images are pushed
-scpDestDir = "spool"
+## template for copying JPG image and metadata, ensuring remote dir is created
+scpCommandTemplate = "ssh -p 30022 -oControlMaster=auto -oControlPath=/tmp/ssh.force radar@radarcam.ca mkdir /volume1/all/radar/fvc/jpg/%s;\
+scp -P 30022 -oControlMaster=auto -oControlPath=/tmp/ssh.force %s radar@radarcam.ca:/volume1/all/radar/fvc/jpg/%s &&\
+scp -P 30022 -oControlMaster=auto -oControlPath=/tmp/ssh.force %s/FORCERadarSweepMetadata.txt radar@radarcam.ca:/volume1/all/radar/fvc/"
 
 ## removal zone - range of azimuths to drop from image
 removal = NULL
@@ -224,11 +223,20 @@ while (TRUE) {
         close(jpgFile)
 
         ## make hardlink in spoolFolder, which must be on same drive
-        file.link(jpgName, file.path(spoolFolder, basename(jpgName)))
+        bn = basename(jpgName)
+        file.link(jpgName, file.path(spoolFolder, bn))
 
-        ## Copy file to discovery.
+        ## Copy file to server
         if (! SPOOL_ONLY) {
-            system(sprintf("scp -oControlMaster=auto -oControlPath=/tmp/tunnel2 -q %s %s/FORCERadarSweepMetadata.txt %s:%s; /bin/rm -f %s", jpgName, tmpDir, scpDestUser, scpDestDir, jpgName), wait=FALSE)
+            ## pull out YYYY-MM-DD
+            u = regexpr("([0-9]{4}-[0-9]{2}-[0-9]{2})", bn)
+            dateString = substring(bn, u, u+9)
+            if (0 == system(sprintf(scpCommandTemplate, dateString, ## make remote dir
+                                    jpgName, dateString, ## copy jpg filejpgName,
+                                    tmpDir ## copy metadata file
+                                    ))) {
+                file.remove(jpgName)
+            }
         }
     }, error=function(e) print(e)
     )
