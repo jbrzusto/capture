@@ -36,9 +36,9 @@ aziRangeOffsets = c(46.8,0,2200,500)
 ## Paul Bell's correction, which doesn't seem right: aziRangeOffsets = c(49.5,0,2200,500)
 
 ## template for copying JPG image and metadata, ensuring remote dir is created
-scpCommandTemplate = "ssh -p 30022 -oControlMaster=auto -oControlPath=/tmp/ssh.force radar@radarcam.ca mkdir /volume1/all/radar/fvc/jpg/%s;\
-scp -P 30022 -oControlMaster=auto -oControlPath=/tmp/ssh.force %s radar@radarcam.ca:/volume1/all/radar/fvc/jpg/%s &&\
-scp -P 30022 -oControlMaster=auto -oControlPath=/tmp/ssh.force %s/FORCERadarSweepMetadata.txt radar@radarcam.ca:/volume1/all/radar/fvc/"
+scpCommandTemplate = "ssh -p 30022 radar@radarcam mkdir /volume1/all/radar/fvc/jpg/%s;\
+scp -P 30022 %s radar@radarcam:/volume1/all/radar/fvc/jpg/%s &&\
+scp -P 30022 %s/FORCERadarSweepMetadata.txt radar@radarcam:/volume1/all/radar/fvc/"
 
 ## removal zone - range of azimuths to drop from image
 removal = NULL

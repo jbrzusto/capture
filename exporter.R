@@ -19,9 +19,14 @@ M = 15
 SLEN = 5
 
 ## template for copying .pol and .jpg files, ensuring remote dir is created
+## 2019-05-07: note the "-l 5000" which is meant to limit bandwidth used
+## by this command, so that the ongoing scp of each sweep jpg is not
+## interrupted.  Compressed pol files are typically under 300 MB, so
+## a max bit rate of 5000 kbps delivers that file in 8 minutes, which
+## should prevent a bottleneck (pol files are sent every 15 minutes).
 scpCommandTemplate = "bzip2 -9 %s && \
-    (ssh -p 30022 -oControlMaster=auto -oControlPath=/tmp/ssh.force radar@radarcam.ca mkdir /volume1/all/radar/fvc/pol/%s;\
-scp -P 30022 -oControlMaster=auto -oControlPath=/tmp/ssh.force %s* radar@radarcam.ca:/volume1/all/radar/fvc/pol/%s)"
+    (ssh -p 30022 radar@radarcam.ca mkdir /volume1/all/radar/fvc/pol/%s;\
+scp -l 5000 -P 30022 %s* radar@radarcam.ca:/volume1/all/radar/fvc/pol/%s)"
 
 ###########################################################################
 ##
@@ -225,10 +230,12 @@ writeJPEG(pix, jpgFile, quality=0.5, bg="black")
 bzName = paste(outname, ".bz2", sep="")
 
 ## compress file; copy to FORCE workstation; delete
-#system(paste("bzip2 -9", outname, "; if ( scp -oControlMaster=no -oControlPath=none -i ~/.ssh/id_dsa_vc_radar_laptop", paste(outnameStem, "*", sep=""), SCP_DEST, ") then", "rm -f", paste(outnameStem, "*", sep=""), "; fi "))
+#system(paste("bzip2 -9", outname, "; if ( scp -i ~/.ssh/id_dsa_vc_radar_laptop", paste(outnameStem, "*", sep=""), SCP_DEST, ") then", "rm -f", paste(outnameStem, "*", sep=""), "; fi "))
 
 u = regexpr("(2[0-9]{3}[0-9]{2}[0-9]{2})", outname)
 dateString = substring(outname, u, u+7)
+## convert YYYYMMDD to YYYY-MM-DD
+dateString = paste(substring(dateString, c(1, 5, 7), c(4, 6, 8)), collapse="-")
 if (0 == system(sprintf(scpCommandTemplate, outname, ## compress .pol file \
                         dateString, ## make remote dir
                         outnameStem, dateString ## copy jpg and pol files,

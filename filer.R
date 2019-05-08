@@ -2,7 +2,7 @@
 ##
 ## move radar files from the spool directory to ongoing storage
 ## Multiple drives are assumed to be mounted in a common directory,
-## and as storage is filled, the oldest files are deleted, hour by hour.
+## and as storage is filled, the oldest files are deleted, day by day.
 
 ## directory where radar sweeps are written by the capture program
 ## NB: *must* include trailing '/'
@@ -39,13 +39,10 @@ drives = dir(RADAR_STORE, full.names=TRUE, pattern="^sd.*$")
 ## get the list of day folders
 days = dir(drives, full.names=TRUE, pattern="^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$")
 
-## get the list of hour folders
-hours = dir(days, full.names=TRUE, pattern="^[0-9][0-9]$")
+days = data.frame(path = I(days), date = basename(days))
+## sort the day folders from oldest to newest
 
-hours = data.frame(path = I(hours), dateHour = I(file.path(basename(dirname(hours)), basename(hours))))
-## sort the hour folders from oldest to newest
-
-hours = hours[order(hours$dateHour),]
+days = days[order(days$date),]
 
 ## start the inotifywait command, which will report events in the radar spool directory.
 ## we're interested in these:
@@ -102,9 +99,9 @@ while (TRUE) {
         if (fsCheckCounter == fsCheckAt) {
             free = getFreeSpace()
             while (sum(free) < FREE_THRESH) {
-                ## delete files from oldest hour
-                system(paste("rm -rf", hours$path[1]))
-                hours = hours[-1,]
+                ## delete files from oldest day
+                system(paste("rm -rf", days$path[1]))
+                days = days[-1,]
                 free = getFreeSpace()
             }
             fsCheckCounter = 0L
@@ -145,13 +142,13 @@ while (TRUE) {
                 ##    [1] "FORCEVC"       "2015"          "11"            "04"
                 ##    [5] "03"            "02"            "54.169557.dat"
 
-                dateHour = sprintf("%s-%s-%s/%s", parts[2], parts[3], parts[4], parts[5])
+                date = sprintf("%s-%s-%s", parts[2], parts[3], parts[4])
 
-                path = file.path(curDrive, dateHour)
+                path = file.path(curDrive, date)
 
-                if (! path %in% hours$path) {
+                if (! path %in% days$path) {
                     dir.create(path, recursive=TRUE)
-                    hours = rbind(hours, data.frame(path = I(path), dateHour=I(dateHour)))
+                    days = rbind(days, data.frame(path = I(path), date=I(date)))
                 }
 
                 ## compress the file to a new location in storage
