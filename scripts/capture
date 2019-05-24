@@ -169,7 +169,7 @@ mkdir $DATADIR
 /home/radar/capture/scripts/rpcapture.sh -p $PULSES -P $PORT -d $DECIM -n $NUMSAMP -T $DATADIR &
 /home/radar/capture/pushLiveImages.R $REMOVE --incoming $DATADIR > /tmp/$LOGFILE 2>&1 &
 nodejs ./serveLatestImages.js &
-nohup /home/radar/capture/filer.R >> /home/radar/capture/filer_log.txt 2>&1 &
+nohup /home/radar/capture/filernew.R >> /home/radar/capture/filer_log.txt 2>&1 &
 
 
 sleep 3

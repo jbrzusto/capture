@@ -83,10 +83,7 @@ drives = dir(RADAR_STORE, full.names=TRUE, pattern="^sd.*$")
 
 ## get the list of day folders
 days = dir(drives, full.names=TRUE, pattern="^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$")
-
-## get the list of hour folders
-hours = dir(days, full.names=TRUE, pattern="^[0-9][0-9]$")
-hours = data.frame(path = I(hours), dateHour = I(file.path(basename(dirname(hours)), basename(hours))))
+days = data.frame(path = I(days), date = basename(days))
 
 ## get current time, calculate start of most recent complete time
 ## period, and find it on disk
@@ -116,10 +113,11 @@ lastStepStart = floor(minutes / M) * M
 start = topOfDay + 60 * lastStepStart
 
 startHour = format(start, "%Y-%m-%d/%H")
+startDay = format(start, "%Y-%m-%d")
 
 ## find folder(s) with matching hour
 
-sourceFolder = hours$path[startHour==hours$dateHour]
+sourceFolder = days$path[startDay == days$date]
 
 if (length(sourceFolder) == 0 || is.na(sourceFolder)) {
     stop("Couldn't find data starting at", start)

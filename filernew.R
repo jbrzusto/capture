@@ -63,7 +63,9 @@ evtCon = fifo(FIFO, "r", blocking=FALSE)
 
 ## get list of files already in spool directory
 
-spoolFiles = sort(dir(RADAR_SPOOL), decreasing=TRUE)
+## No: file only incoming new sweeps
+## spoolFiles = sort(dir(RADAR_SPOOL), decreasing=TRUE)
+spoolFiles = c()
 
 getFreeSpace = function() {
     ## return number of bytes free on disks mounted under radar storage folder
