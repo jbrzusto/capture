@@ -79,7 +79,7 @@ fsCheckCounter = fsCheckAt
 ## If there's nothing to do, it sleeps 100ms
 
 while (length(spoolFiles) > 0L) {
-    tryCatch({
+#    tryCatch({
         if (fsCheckCounter == fsCheckAt) {
             free = getFreeSpace()
             while (sum(free) < FREE_THRESH) {
@@ -121,8 +121,8 @@ while (length(spoolFiles) > 0L) {
         system(cmd, wait=FALSE)
         cat(fn, "\n")
         fsCheckCounter = fsCheckCounter + 1L
-    }, error=function(e) {
-        cat(as.character(e), "\n")
-        Sys.sleep(1)
-    })
+ #   }, error=function(e) {
+ #       cat(as.character(e), "\n")
+ #       Sys.sleep(1)
+ #   })
 }
