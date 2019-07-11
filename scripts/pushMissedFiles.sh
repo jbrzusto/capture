@@ -13,8 +13,15 @@
 cd /tmp
 
 for f in `ls -1 *bz2 2*jpg | sort -r` ; do
-    if ( scp -oControlMaster=no -oControlPath=none -i ~/.ssh/id_dsa_vc_radar_laptop $f radar_upload@force:data ); then
+    YEAR=${f:0:4}
+    MONTH=${f:4:2}
+    DAY=${f:6:2}
+    DATE=$YEAR-$MONTH-$DAY
+    ssh radar@radarcam mkdir /volume1/all/radar/fvc/pol/$DATE
+    if ( scp -l 10000 -P 30022 $f radar@radarcam:/volume1/all/radar/fvc/pol/$DATE ); then
         rm -f $f
-        sleep 20  ## be nice about it
+        if [[ "$f{/*./}" == "bz2" ]]; then
+            sleep 20
+        fi
     fi
 done
