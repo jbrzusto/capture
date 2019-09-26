@@ -17,8 +17,8 @@ for f in `ls -1 *bz2 2*jpg | sort -r` ; do
     MONTH=${f:4:2}
     DAY=${f:6:2}
     DATE=$YEAR-$MONTH-$DAY
-    ssh radar@radarcam mkdir /volume1/all/radar/fvc/pol/$DATE
-    if ( scp -l 10000 -P 30022 $f radar@radarcam:/volume1/all/radar/fvc/pol/$DATE ); then
+    ssh radar@force mkdir /volume1/all/radar/fvc/pol/$DATE
+    if ( scp -l 10000 -P 30022 $f radar@force:/volume1/all/radar/fvc/pol/$DATE ); then
         rm -f $f
         if [[ "$f{/*./}" == "bz2" ]]; then
             sleep 20
