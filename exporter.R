@@ -25,8 +25,8 @@ SLEN = 5
 ## a max bit rate of 5000 kbps delivers that file in 8 minutes, which
 ## should prevent a bottleneck (pol files are sent every 15 minutes).
 scpCommandTemplate = "bzip2 -9 %s && \
-    (ssh -p 30022 radar@force mkdir /volume1/all/radar/fvc/pol/%s;\
-scp -l 5000 -P 30022 %s* radar@force:/volume1/all/radar/fvc/pol/%s)"
+    (ssh -p 30022 radar2@force2 mkdir /volume1/all/radar/fvc/pol/%s;\
+scp -l 5000 -P 30022 %s* radar2@force2:/volume1/all/radar/fvc/pol/%s)"
 
 ###########################################################################
 ##
